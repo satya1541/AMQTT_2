@@ -47,27 +47,73 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
     }
   };
 
+  const headerVariants = {
+    initial: {
+      opacity: 0,
+      y: -10
+    },
+    animate: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.5,
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    initial: { opacity: 0, y: -5 },
+    animate: { 
+      opacity: 1, 
+      y: 0,
+      transition: { duration: 0.4 }
+    }
+  };
+
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-sm bg-background/90 border-b border-border shadow-md">
+    <motion.header 
+      className="sticky top-0 z-50 backdrop-blur-sm bg-background/90 border-b border-border shadow-md"
+      initial="initial"
+      animate="animate"
+      variants={headerVariants}
+    >
       <div className="container mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center">
         <motion.div 
           className="flex items-center space-x-3 mb-3 md:mb-0"
           variants={logoVariants}
           animate="animate"
+          whileHover={{ scale: 1.05 }}
+          transition={{ type: "spring", stiffness: 400 }}
         >
-          <div className="h-8 w-8 flex items-center justify-center bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg data-flow-icon">
-            <i className="fas fa-satellite-dish text-white text-xl"></i>
-          </div>
-          <h1 className="font-heading text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 via-purple-500 to-teal-500 text-glow">
+          <motion.div 
+            className="h-9 w-9 flex items-center justify-center bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg data-flow-icon relative overflow-hidden"
+            whileHover={{ rotate: [0, 5, -5, 0], transition: { duration: 0.6 } }}
+          >
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-blue-500/20"
+              animate={{ 
+                x: ['-100%', '100%'],
+                transition: { repeat: Infinity, duration: 2, ease: "linear" }
+              }}
+            />
+            <i className="fas fa-satellite-dish text-white text-xl relative z-10"></i>
+          </motion.div>
+          <motion.h1 
+            className="font-heading text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 via-purple-500 to-teal-500 text-glow"
+            variants={itemVariants}
+          >
             MQTT Explorer
-          </h1>
+          </motion.h1>
         </motion.div>
         
-        <div className="flex items-center space-x-4">
+        <motion.div className="flex items-center space-x-4" variants={itemVariants}>
           <motion.div 
             className="glass-card px-4 py-1.5 rounded-full flex items-center text-sm shadow-md"
             variants={statusVariants}
             animate={connectionStatus}
+            whileHover={{ scale: 1.05 }}
+            transition={{ type: "spring", stiffness: 400 }}
           >
             <span className={getStatusClass()}></span>
             <span className="ml-2.5">
@@ -76,24 +122,38 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
             </span>
           </motion.div>
           
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="rounded-full bg-gray-800/50 border-gray-700 hover:bg-gray-700/50"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
+          <motion.div 
+            whileHover={{ rotate: 180 }}
+            transition={{ duration: 0.4 }}
           >
-            {theme === 'dark' ? (
-              <i className="fas fa-moon text-yellow-300"></i>
-            ) : (
-              <i className="fas fa-sun text-yellow-500"></i>
-            )}
-          </Button>
-        </div>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="rounded-full bg-gray-800/50 border-gray-700 hover:bg-gray-700/50 relative overflow-hidden"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+            >
+              <motion.span
+                className="absolute inset-0 bg-yellow-500/10"
+                initial={{ scale: 0, opacity: 0 }}
+                whileHover={{ scale: 1.5, opacity: 1 }}
+                transition={{ duration: 0.5 }}
+              />
+              {theme === 'dark' ? (
+                <i className="fas fa-moon text-yellow-300 relative z-10"></i>
+              ) : (
+                <i className="fas fa-sun text-yellow-500 relative z-10"></i>
+              )}
+            </Button>
+          </motion.div>
+        </motion.div>
       </div>
       
       {/* Navigation Tabs */}
-      <nav className="container mx-auto px-4 flex overflow-x-auto">
+      <motion.nav 
+        className="container mx-auto px-4 flex overflow-x-auto"
+        variants={itemVariants}
+      >
         <Tabs defaultValue={currentPath === '/' ? '/' : currentPath} className="w-full">
           <TabsList className="w-full justify-start h-auto bg-transparent">
             {[
@@ -102,23 +162,43 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
               { path: '/rules', icon: 'brain', label: 'AI & Rules' },
               { path: '/history', icon: 'history', label: 'History' },
               { path: '/settings', icon: 'cog', label: 'Settings' }
-            ].map((item) => (
-              <TabsTrigger 
-                key={item.path} 
-                value={item.path} 
-                asChild 
-                className="data-[state=active]:bg-gray-800/50 data-[state=active]:text-purple-400 data-[state=active]:border-b-2 data-[state=active]:border-purple-500 py-3 rounded-none transition-all duration-300 ease-in-out"
+            ].map((item, index) => (
+              <motion.div
+                key={item.path}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + index * 0.05, duration: 0.4 }}
               >
-                <Link href={item.path} className="flex items-center px-4">
-                  <i className={`fas fa-${item.icon} mr-2 ${currentPath === item.path ? 'text-purple-400' : 'text-gray-400'}`}></i>
-                  {item.label}
-                </Link>
-              </TabsTrigger>
+                <TabsTrigger 
+                  value={item.path} 
+                  asChild 
+                  className="data-[state=active]:bg-gray-800/50 data-[state=active]:text-purple-400 data-[state=active]:border-b-2 data-[state=active]:border-purple-500 py-3 rounded-none transition-all duration-300 ease-in-out"
+                >
+                  <Link href={item.path} className="flex items-center px-4 relative group">
+                    <motion.span 
+                      className="absolute bottom-0 left-0 h-0.5 bg-purple-500 w-0 rounded-full"
+                      initial={false}
+                      animate={{ width: currentPath === item.path ? '100%' : '0%' }}
+                      transition={{ duration: 0.3 }}
+                    />
+                    <motion.span
+                      whileHover={{ 
+                        scale: 1.2,
+                        transition: { duration: 0.2 } 
+                      }}
+                      className="inline-block"
+                    >
+                      <i className={`fas fa-${item.icon} mr-2 ${currentPath === item.path ? 'text-purple-400' : 'text-gray-400 group-hover:text-gray-300'}`}></i>
+                    </motion.span>
+                    <span className="group-hover:text-gray-200 transition-colors duration-300">{item.label}</span>
+                  </Link>
+                </TabsTrigger>
+              </motion.div>
             ))}
           </TabsList>
         </Tabs>
-      </nav>
-    </header>
+      </motion.nav>
+    </motion.header>
   );
 };
 
