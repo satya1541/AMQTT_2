@@ -9,11 +9,15 @@ import Rules from "@/pages/rules";
 import History from "@/pages/history";
 import Settings from "@/pages/settings";
 import AppHeader from "@/components/app-header";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MQTTProvider } from "@/hooks/use-mqtt";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { RulesProvider } from "@/hooks/use-rules";
 import { ChartsProvider } from "@/hooks/use-charts";
+import PWAInstallPrompt from "@/components/pwa-install-prompt";
+import OfflineIndicator from "@/components/offline-indicator";
+import { checkForAppUpdate } from "@/lib/pwa-utils";
+import { useToast } from "@/hooks/use-toast";
 
 function Router() {
   const [location] = useLocation();
@@ -66,6 +70,24 @@ function Router() {
 }
 
 function App() {
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const { toast } = useToast();
+
+  // Check for service worker updates
+  useEffect(() => {
+    if (toast) {
+      checkForAppUpdate(() => {
+        setUpdateAvailable(true);
+        toast({
+          title: "Update Available",
+          description: "A new version is available. The app will update automatically.",
+          variant: "info",
+          id: Date.now().toString()
+        });
+      });
+    }
+  }, [toast]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
@@ -73,6 +95,12 @@ function App() {
           <RulesProvider>
             <ChartsProvider>
               <Router />
+              {/* Show PWA Install Prompt */}
+              <div className="fixed bottom-4 left-4 right-4 md:left-auto z-40">
+                <PWAInstallPrompt />
+              </div>
+              {/* Show Offline Indicator */}
+              <OfflineIndicator />
               <Toaster />
             </ChartsProvider>
           </RulesProvider>

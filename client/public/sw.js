@@ -1,74 +1,101 @@
-const CACHE_NAME = 'mqtt-insight-v1';
+// Service Worker for MQTT Explorer PWA
+
+const CACHE_NAME = 'mqtt-explorer-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
-// Install service worker and cache the static assets
+// Install event - cache assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
         return cache.addAll(ASSETS_TO_CACHE);
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        return self.skipWaiting();
+      })
   );
 });
 
-// Activate the service worker and clean up old caches
+// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  const currentCaches = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
-      return cacheNames.filter(cacheName => !currentCaches.includes(cacheName));
-    }).then((cachesToDelete) => {
-      return Promise.all(cachesToDelete.map((cacheToDelete) => {
-        return caches.delete(cacheToDelete);
-      }));
-    }).then(() => self.clients.claim())
+      return Promise.all(
+        cacheNames.filter((name) => {
+          return name !== CACHE_NAME;
+        }).map((name) => {
+          return caches.delete(name);
+        })
+      );
+    }).then(() => {
+      return self.clients.claim();
+    })
   );
 });
 
-// Serve cached content when offline
+// Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
-  // Skip cross-origin requests
-  if (event.request.url.startsWith(self.location.origin)) {
-    event.respondWith(
-      caches.match(event.request)
-        .then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          
-          return fetch(event.request).then((response) => {
-            // Skip caching for non-GET requests or errors
-            if (!response || response.status !== 200 || response.type !== 'basic' || event.request.method !== 'GET') {
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Skip browser extension requests and API calls
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => {
+        // Return cached response if found
+        if (response) {
+          return response;
+        }
+
+        // Clone the request as it can only be used once
+        const fetchRequest = event.request.clone();
+
+        return fetch(fetchRequest)
+          .then((response) => {
+            // Check if response is valid
+            if (!response || response.status !== 200 || response.type !== 'basic') {
               return response;
             }
-            
-            // Clone the response since we'll consume the body
+
+            // Clone the response as it can only be used once
             const responseToCache = response.clone();
-            
+
+            // Open cache and store response
             caches.open(CACHE_NAME)
               .then((cache) => {
                 cache.put(event.request, responseToCache);
               });
-            
+
             return response;
+          })
+          .catch(() => {
+            // Network failed, try to serve the index.html for navigation
+            if (event.request.mode === 'navigate') {
+              return caches.match('/index.html');
+            }
+            
+            return null;
           });
-        })
-        .catch(() => {
-          // Network request failed and no cache - return a fallback
-          if (event.request.url.includes('index.html')) {
-            return caches.match('/index.html');
-          }
-          // For API requests and other failed requests, we just fail
-          return new Response('Network error happened', {
-            status: 408,
-            headers: { 'Content-Type': 'text/plain' }
-          });
-        })
-    );
+      })
+  );
+});
+
+// Listen for messages from clients
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   }
 });
