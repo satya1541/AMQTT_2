@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ConnectionForm: React.FC = () => {
-  const { toast } = useToast();
+  const toast = useToast();
   const { 
     connect, 
     disconnect, 
@@ -80,7 +80,7 @@ const ConnectionForm: React.FC = () => {
 
   const handleSaveProfile = () => {
     if (!profileName.trim()) {
-      toast.toast({
+      toast({
         title: "Profile Name Required",
         description: "Please enter a name for this profile",
         variant: "warning"
