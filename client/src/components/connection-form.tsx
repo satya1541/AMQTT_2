@@ -226,9 +226,21 @@ const ConnectionForm: React.FC = () => {
               
               <Dialog open={showSaveProfileDialog} onOpenChange={setShowSaveProfileDialog}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-white" title="Save Profile">
-                    <i className="fas fa-save text-blue-400"></i>
-                  </Button>
+                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                    <Button 
+                      variant="outline" 
+                      className="bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-white rounded-full h-10 w-10 p-0 relative overflow-hidden" 
+                      title="Save Profile"
+                    >
+                      <motion.span 
+                        className="absolute inset-0 bg-blue-500/10"
+                        initial={{ scale: 0, opacity: 0 }}
+                        whileHover={{ scale: 1.5, opacity: 1 }}
+                        transition={{ duration: 0.5 }}
+                      />
+                      <motion.i className="fas fa-save text-blue-400 relative z-10" />
+                    </Button>
+                  </motion.div>
                 </DialogTrigger>
                 <DialogContent className="bg-gray-800 text-white border-gray-700">
                   <DialogHeader>
@@ -255,15 +267,23 @@ const ConnectionForm: React.FC = () => {
               
               <AlertDialog open={!!profileToDelete} onOpenChange={(open) => !open && setProfileToDelete(null)}>
                 <AlertDialogTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    className="bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-white" 
-                    title="Delete Profile"
-                    onClick={() => selectedProfileId && setProfileToDelete(selectedProfileId)}
-                    disabled={!selectedProfileId}
-                  >
-                    <i className="fas fa-trash text-red-400"></i>
-                  </Button>
+                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+                    <Button 
+                      variant="outline" 
+                      className="bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-white rounded-full h-10 w-10 p-0 relative overflow-hidden" 
+                      title="Delete Profile"
+                      onClick={() => selectedProfileId && setProfileToDelete(selectedProfileId)}
+                      disabled={!selectedProfileId}
+                    >
+                      <motion.span 
+                        className="absolute inset-0 bg-red-500/10"
+                        initial={{ scale: 0, opacity: 0 }}
+                        whileHover={{ scale: 1.5, opacity: 1 }}
+                        transition={{ duration: 0.5 }}
+                      />
+                      <motion.i className="fas fa-trash text-red-400 relative z-10" />
+                    </Button>
+                  </motion.div>
                 </AlertDialogTrigger>
                 <AlertDialogContent className="bg-gray-800 text-white border-gray-700">
                   <AlertDialogHeader>
@@ -479,11 +499,23 @@ const ConnectionForm: React.FC = () => {
                 <Button
                   id="connect-btn"
                   type="button" 
-                  className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white shadow-lg shadow-green-900/30 border border-green-500/50"
+                  className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white shadow-lg shadow-green-900/30 border border-green-500/50 relative overflow-hidden"
                   onClick={handleConnect}
                   disabled={!brokerUrl || !baseTopic}
                 >
-                  <i className="fas fa-plug mr-2"></i> Connect
+                  <motion.span 
+                    className="absolute inset-0 bg-gradient-to-r from-green-400/20 to-emerald-400/10 rounded-md"
+                    initial={{ x: '-100%' }}
+                    animate={{ x: '100%' }}
+                    transition={{ duration: 2, repeat: Infinity, repeatType: 'loop' }}
+                  />
+                  <motion.div 
+                    className="relative z-10 flex items-center justify-center"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <i className="fas fa-plug mr-2"></i> Connect
+                  </motion.div>
                 </Button>
               </motion.div>
             ) : (
@@ -497,25 +529,42 @@ const ConnectionForm: React.FC = () => {
               >
                 <Button
                   id="disconnect-btn"
-                  type="button" 
-                  className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white shadow-lg shadow-red-900/30 border border-red-500/50"
+                  type="button"
+                  className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white shadow-lg shadow-red-900/30 border border-red-500/50 relative overflow-hidden"
                   onClick={disconnect}
                 >
-                  <i className="fas fa-power-off mr-2"></i> Disconnect
+                  <motion.span 
+                    className="absolute inset-0 bg-gradient-to-r from-red-400/20 to-red-700/10 rounded-md"
+                    initial={{ x: '-100%' }}
+                    animate={{ x: '100%' }}
+                    transition={{ duration: 2, repeat: Infinity, repeatType: 'loop' }}
+                  />
+                  <motion.div 
+                    className="relative z-10 flex items-center justify-center"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <i className="fas fa-power-off mr-2"></i> Disconnect
+                  </motion.div>
                 </Button>
               </motion.div>
             )}
           </AnimatePresence>
           
-          <Button 
-            type="reset" 
-            variant="outline" 
-            className="bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-white"
-            onClick={handleFormReset}
-            disabled={connectionStatus !== 'disconnected'}
+          <motion.div 
+            whileHover={{ rotate: 360 }}
+            transition={{ duration: 1, type: "spring" }}
           >
-            <i className="fas fa-redo"></i>
-          </Button>
+            <Button 
+              type="reset" 
+              variant="outline" 
+              className="bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-white rounded-full h-10 w-10 p-0"
+              onClick={handleFormReset}
+              disabled={connectionStatus !== 'disconnected'}
+            >
+              <i className="fas fa-redo"></i>
+            </Button>
+          </motion.div>
         </motion.div>
       </motion.div>
     </motion.div>
