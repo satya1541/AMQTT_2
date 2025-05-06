@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer } from "ws";
 import WebSocket from "ws";
 import * as mqtt from 'mqtt';
+import { PacketCallback } from 'mqtt';
 
 interface MqttClientConnection {
   client: mqtt.MqttClient;
@@ -215,7 +216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const qos = data.qos || 0;
     
     try {
-      connection.client.subscribe(topic, { qos }, (err) => {
+      connection.client.subscribe(topic, { qos }, (err, granted) => {
         if (err) {
           console.error('Error subscribing to topic:', err);
           if (ws.readyState === WebSocket.OPEN) {
@@ -262,13 +263,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const topic = data.topic;
     
     try {
-      connection.client.unsubscribe(topic, (err) => {
-        if (err) {
-          console.error('Error unsubscribing from topic:', err);
+      connection.client.unsubscribe(topic, (error: Error | null, packet?: any) => {
+        if (error) {
+          console.error('Error unsubscribing from topic:', error);
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
               type: 'mqtt-error',
-              error: `Failed to unsubscribe from ${topic}: ${err.message}`
+              error: `Failed to unsubscribe from ${topic}: ${error.message}`
             }));
           }
         } else {
@@ -311,13 +312,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const retain = data.retain || false;
     
     try {
-      connection.client.publish(topic, message, { qos, retain }, (err) => {
-        if (err) {
-          console.error('Error publishing message:', err);
+      connection.client.publish(topic, message, { qos, retain }, (error: Error | null, packet?: any) => {
+        if (error) {
+          console.error('Error publishing message:', error);
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
               type: 'mqtt-error',
-              error: `Failed to publish to ${topic}: ${err.message}`
+              error: `Failed to publish to ${topic}: ${error.message}`
             }));
           }
         } else {
