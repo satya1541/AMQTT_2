@@ -636,7 +636,7 @@ const DataVisualization: React.FC = () => {
               </div>
               
               {/* Statistics */}
-              <div className="grid grid-cols-4 gap-3 text-center text-sm">
+              <div className="grid grid-cols-4 gap-3 text-center text-sm mb-3">
                 <div className="bg-gray-800/70 rounded-lg p-2 border border-gray-700/30">
                   <div className="text-gray-400 mb-1">Min</div>
                   <div className="font-mono text-blue-300">{formatNumber(chartData.min)}</div>
@@ -654,6 +654,71 @@ const DataVisualization: React.FC = () => {
                   <div className="font-mono text-amber-300">{formatNumber(chartData.last)}</div>
                 </div>
               </div>
+              
+              {/* Data Insights */}
+              {chartData.insights && chartData.insights.length > 0 && (
+                <motion.div 
+                  className="bg-gray-800/50 rounded-lg p-3 border border-indigo-500/20 mb-2"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="text-indigo-400 text-lg">
+                      <i className="fas fa-lightbulb"></i>
+                    </div>
+                    <h5 className="text-indigo-300 font-medium">Data Insights</h5>
+                  </div>
+                  
+                  <div className="space-y-2 text-sm">
+                    {chartData.trend && (
+                      <div className="flex items-center gap-2">
+                        <div className={`text-sm ${
+                          chartData.trend === 'rising' ? 'text-green-400' : 
+                          chartData.trend === 'falling' ? 'text-red-400' : 'text-blue-400'
+                        }`}>
+                          <i className={`fas ${
+                            chartData.trend === 'rising' ? 'fa-arrow-up' : 
+                            chartData.trend === 'falling' ? 'fa-arrow-down' : 'fa-equals'
+                          }`}></i>
+                        </div>
+                        <div className="text-gray-300">
+                          Trend: <span className={
+                            chartData.trend === 'rising' ? 'text-green-400' : 
+                            chartData.trend === 'falling' ? 'text-red-400' : 'text-blue-400'
+                          }>{chartData.trend}</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {chartData.volatility && (
+                      <div className="flex items-center gap-2">
+                        <div className={`text-sm ${
+                          chartData.volatility === 'high' ? 'text-orange-400' : 
+                          chartData.volatility === 'medium' ? 'text-yellow-400' : 'text-green-400'
+                        }`}>
+                          <i className={`fas ${
+                            chartData.volatility === 'high' ? 'fa-bolt' : 
+                            chartData.volatility === 'medium' ? 'fa-chart-line' : 'fa-grip-lines'
+                          }`}></i>
+                        </div>
+                        <div className="text-gray-300">
+                          Volatility: <span className={
+                            chartData.volatility === 'high' ? 'text-orange-400' : 
+                            chartData.volatility === 'medium' ? 'text-yellow-400' : 'text-green-400'
+                          }>{chartData.volatility}</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <ul className="list-disc list-inside text-gray-300 text-xs space-y-1 mt-1">
+                      {chartData.insights.map((insight, index) => (
+                        <li key={index}>{insight}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
           ))}
         </AnimatePresence>
