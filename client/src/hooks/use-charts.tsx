@@ -18,6 +18,11 @@ interface ChartSettings {
   yAxisMax: number | null;
   showGrid: boolean;
   autoScale: boolean;
+  enableForecast: boolean;
+  forecastPoints: number;
+  anomalyDetection: boolean;
+  anomalyThresholdMode: 'auto' | 'manual';
+  anomalyThreshold: number;
 }
 
 interface ChartData {
@@ -58,7 +63,12 @@ const initialSettings: ChartSettings = {
   yAxisMin: null,
   yAxisMax: null,
   showGrid: true,
-  autoScale: true
+  autoScale: true,
+  enableForecast: true,
+  forecastPoints: 5,
+  anomalyDetection: true,
+  anomalyThresholdMode: 'auto',
+  anomalyThreshold: 2.0
 };
 
 const ChartsContext = createContext<ChartsContextType | undefined>(undefined);

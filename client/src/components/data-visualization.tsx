@@ -31,6 +31,8 @@ interface ChartData {
   trend?: 'rising' | 'falling' | 'stable' | null;
   volatility?: 'high' | 'medium' | 'low' | null;
   insights?: string[];
+  forecast?: { x: number; y: number }[];
+  anomalyThreshold?: number;
 }
 
 const DataVisualization: React.FC = () => {
@@ -270,6 +272,11 @@ const DataVisualization: React.FC = () => {
           // Detect patterns and generate insights
           const trend = detectTrend(truncatedData);
           const volatility = calculateVolatility(truncatedData);
+          const anomalyThreshold = calculateAnomalyThreshold(truncatedData);
+          const forecast = trend && trend !== 'stable' && truncatedData.length > 10 
+            ? generateForecast(truncatedData) 
+            : [];
+            
           const insights = generateInsights({
             ...chartData,
             data: truncatedData,
@@ -278,12 +285,38 @@ const DataVisualization: React.FC = () => {
             avg,
             last,
             trend,
-            volatility
+            volatility,
+            forecast,
+            anomalyThreshold
           });
           
           // Update chart instance if it exists
           if (chartData.chart) {
+            // Clear existing datasets
+            while (chartData.chart.data.datasets.length > 1) {
+              chartData.chart.data.datasets.pop();
+            }
+            
+            // Update main data
             chartData.chart.data.datasets[0].data = truncatedData;
+            
+            // Add forecast dataset if available
+            if (forecast.length > 0 && (chartData.type === 'line' || chartData.type === 'bar')) {
+              // Add a dotted line showing the forecast
+              chartData.chart.data.datasets.push({
+                label: `${chartData.key} (Forecast)`,
+                data: forecast,
+                borderColor: '#ffffff80',
+                borderDash: [5, 5],
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                tension: 0.3,
+                pointRadius: 2,
+                pointBackgroundColor: chartData.color,
+                fill: false
+              });
+            }
+            
             chartData.chart.update();
           }
           
@@ -296,7 +329,9 @@ const DataVisualization: React.FC = () => {
             last,
             trend,
             volatility,
-            insights
+            insights,
+            forecast,
+            anomalyThreshold
           };
         });
       });
@@ -394,6 +429,56 @@ const DataVisualization: React.FC = () => {
     return 'high';
   };
   
+  // Generate predictive forecast based on recent data trend
+  const generateForecast = (data: { x: number; y: number }[], steps: number = 5): { x: number; y: number }[] => {
+    if (data.length < 10) return []; // Need sufficient data for forecasting
+    
+    // Use recent data for forecasting
+    const recentData = data.slice(-15);
+    
+    // Simple linear regression for forecast
+    const xValues = recentData.map(d => d.x);
+    const yValues = recentData.map(d => d.y);
+    
+    const xMean = xValues.reduce((sum, val) => sum + val, 0) / xValues.length;
+    const yMean = yValues.reduce((sum, val) => sum + val, 0) / yValues.length;
+    
+    let numerator = 0;
+    let denominator = 0;
+    
+    for (let i = 0; i < xValues.length; i++) {
+      numerator += (xValues[i] - xMean) * (yValues[i] - yMean);
+      denominator += Math.pow(xValues[i] - xMean, 2);
+    }
+    
+    const slope = denominator !== 0 ? numerator / denominator : 0;
+    const intercept = yMean - (slope * xMean);
+    
+    // Generate forecast points
+    const forecast: { x: number; y: number }[] = [];
+    const lastX = data[data.length - 1].x;
+    
+    for (let i = 1; i <= steps; i++) {
+      const x = lastX + i;
+      const y = (slope * x) + intercept;
+      forecast.push({ x, y });
+    }
+    
+    return forecast;
+  };
+  
+  // Calculate anomaly detection threshold based on data volatility
+  const calculateAnomalyThreshold = (data: { x: number; y: number }[]): number => {
+    if (data.length < 5) return 2.0; // Default 2 standard deviations
+    
+    const volatility = calculateVolatility(data);
+    
+    // Adjust threshold based on volatility
+    if (volatility === 'high') return 3.0; // More permissive for high volatility data
+    if (volatility === 'low') return 1.5;  // More strict for low volatility data
+    return 2.0; // Default for medium volatility
+  };
+  
   // Generate insights based on data patterns
   const generateInsights = (chartData: ChartData): string[] => {
     if (chartData.data.length < 5) return [];
@@ -402,8 +487,14 @@ const DataVisualization: React.FC = () => {
     const trend = detectTrend(chartData.data);
     const volatility = calculateVolatility(chartData.data);
     
-    // Trend insights
-    if (trend === 'rising') {
+    // Time-weighted trend analysis (focus more on recent data)
+    const recentData = chartData.data.slice(-5);
+    const recentTrend = detectTrend(recentData);
+    
+    // Add trend insights with time context
+    if (recentTrend && recentTrend !== trend) {
+      insights.push(`Recent shift to ${recentTrend} trend detected.`);
+    } else if (trend === 'rising') {
       insights.push(`Upward trend detected in ${chartData.key} values.`);
     } else if (trend === 'falling') {
       insights.push(`Downward trend detected in ${chartData.key} values.`);
@@ -418,14 +509,29 @@ const DataVisualization: React.FC = () => {
       insights.push(`The values show consistent, predictable patterns.`);
     }
     
-    // Anomaly detection (simple)
+    // Advanced anomaly detection
     const yValues = chartData.data.map(d => d.y);
     const mean = yValues.reduce((sum, val) => sum + val, 0) / yValues.length;
     const stdDev = Math.sqrt(yValues.map(val => Math.pow(val - mean, 2)).reduce((sum, val) => sum + val, 0) / yValues.length);
     
+    // Adaptive threshold based on data characteristics
+    const anomalyThreshold = calculateAnomalyThreshold(chartData.data);
+    
     const lastValue = yValues[yValues.length - 1];
-    if (Math.abs(lastValue - mean) > 2 * stdDev) {
-      insights.push(`Recent value may be an anomaly (outside 2σ range).`);
+    if (Math.abs(lastValue - mean) > anomalyThreshold * stdDev) {
+      insights.push(`Recent value may be an anomaly (outside ${anomalyThreshold.toFixed(1)}σ range).`);
+    }
+    
+    // Generate forecasting insight if trend is not stable
+    if (trend && trend !== 'stable' && chartData.data.length > 10) {
+      const forecast = generateForecast(chartData.data);
+      if (forecast.length > 0) {
+        const lastValue = chartData.data[chartData.data.length - 1].y;
+        const forecastEndValue = forecast[forecast.length - 1].y;
+        const changePercent = ((forecastEndValue - lastValue) / lastValue) * 100;
+        
+        insights.push(`Forecast: ${trend === 'rising' ? 'Increase' : 'Decrease'} of approximately ${Math.abs(changePercent).toFixed(1)}% expected.`);
+      }
     }
     
     return insights;
@@ -707,6 +813,28 @@ const DataVisualization: React.FC = () => {
                             chartData.volatility === 'high' ? 'text-orange-400' : 
                             chartData.volatility === 'medium' ? 'text-yellow-400' : 'text-green-400'
                           }>{chartData.volatility}</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {chartData.anomalyThreshold && (
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm text-purple-400">
+                          <i className="fas fa-filter"></i>
+                        </div>
+                        <div className="text-gray-300">
+                          Anomaly Threshold: <span className="text-purple-400">{chartData.anomalyThreshold.toFixed(1)}σ</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {chartData.forecast && chartData.forecast.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm text-blue-400">
+                          <i className="fas fa-crystal-ball"></i>
+                        </div>
+                        <div className="text-gray-300">
+                          Forecast: <span className="text-blue-400">Next {chartData.forecast.length} points</span>
                         </div>
                       </div>
                     )}

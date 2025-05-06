@@ -62,10 +62,11 @@ const ChartSettingsPanel: React.FC = () => {
         </DialogHeader>
         
         <Tabs defaultValue="appearance" className="mt-5">
-          <TabsList className="grid grid-cols-3 bg-gray-800/50">
+          <TabsList className="grid grid-cols-4 bg-gray-800/50">
             <TabsTrigger value="appearance" className="data-[state=active]:bg-gray-700/70">Appearance</TabsTrigger>
             <TabsTrigger value="behavior" className="data-[state=active]:bg-gray-700/70">Behavior</TabsTrigger>
             <TabsTrigger value="axes" className="data-[state=active]:bg-gray-700/70">Axes & Scale</TabsTrigger>
+            <TabsTrigger value="analysis" className="data-[state=active]:bg-gray-700/70">Analysis</TabsTrigger>
           </TabsList>
           
           {/* Appearance Tab */}
@@ -309,6 +310,109 @@ const ChartSettingsPanel: React.FC = () => {
                 <p className="flex items-start">
                   <i className="fas fa-info-circle mr-2 mt-1"></i>
                   <span>Leave Y-Axis values empty for automatic scaling based on data. Manual values will override auto scaling.</span>
+                </p>
+              </div>
+            </motion.div>
+          </TabsContent>
+          
+          {/* Analysis Tab */}
+          <TabsContent value="analysis" className="p-4 rounded-md mt-2 bg-gray-800/30">
+            <motion.div 
+              className="space-y-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="space-y-2 mb-4">
+                <h3 className="text-lg font-medium text-indigo-400">Intelligent Data Analysis</h3>
+                <p className="text-sm text-gray-400">Configure how data insights and predictions are generated</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="enableForecast" className="mb-2 block">Enable Forecasting</Label>
+                    <Switch 
+                      id="enableForecast"
+                      checked={settings.enableForecast}
+                      onCheckedChange={handleSwitchChange('enableForecast')}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400">Shows predictive forecast for future data points</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="forecastPoints">Forecast Points</Label>
+                  <Input 
+                    id="forecastPoints"
+                    type="number" 
+                    min={1} 
+                    max={20} 
+                    value={settings.forecastPoints}
+                    className="bg-gray-800 border-gray-700"
+                    disabled={!settings.enableForecast}
+                    onChange={e => {
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val >= 1) {
+                        updateSettings({ forecastPoints: val });
+                      }
+                    }}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="anomalyDetection" className="mb-2 block">Anomaly Detection</Label>
+                    <Switch 
+                      id="anomalyDetection"
+                      checked={settings.anomalyDetection}
+                      onCheckedChange={handleSwitchChange('anomalyDetection')}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400">Highlights data points that deviate from normal patterns</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="anomalyThresholdMode">Threshold Mode</Label>
+                  <Select 
+                    value={settings.anomalyThresholdMode} 
+                    onValueChange={handleSelectChange('anomalyThresholdMode')}
+                    disabled={!settings.anomalyDetection}
+                  >
+                    <SelectTrigger id="anomalyThresholdMode" className="bg-gray-800 border-gray-700">
+                      <SelectValue placeholder="Select threshold mode" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-800 border-gray-700">
+                      <SelectItem value="auto">Auto (Based on Data Volatility)</SelectItem>
+                      <SelectItem value="manual">Manual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="anomalyThreshold">Threshold Value (σ)</Label>
+                  <div className="flex items-center gap-4">
+                    <Slider 
+                      id="anomalyThreshold"
+                      value={[settings.anomalyThreshold]} 
+                      min={1} 
+                      max={5} 
+                      step={0.1}
+                      disabled={!settings.anomalyDetection || settings.anomalyThresholdMode === 'auto'}
+                      onValueChange={handleSliderChange('anomalyThreshold')}
+                      className="flex-1" 
+                    />
+                    <div className="w-12 text-center font-mono bg-gray-800 rounded-md px-2 py-1 text-sm">
+                      {settings.anomalyThreshold.toFixed(1)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-6 px-3 py-3 rounded-md bg-purple-900/20 border border-purple-800/30 text-purple-300 text-sm">
+                <p className="flex items-start">
+                  <i className="fas fa-magic mr-2 mt-1"></i>
+                  <span>Intelligent analysis features use machine learning techniques to identify patterns, predict future values, and detect anomalies in your data.</span>
                 </p>
               </div>
             </motion.div>
