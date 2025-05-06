@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMqtt, ConnectionProfile } from '@/hooks/use-mqtt';
+import { useMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -163,14 +164,16 @@ const ConnectionForm: React.FC = () => {
     }
   };
 
+  const isMobile = useMobile();
+
   return (
     <motion.div 
-      className="glass-card neon-border rounded-lg shadow-xl p-6"
+      className="glass-card neon-border rounded-lg shadow-xl p-4 sm:p-6"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-3">
         <motion.h2 
           className="font-heading text-xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500"
           initial={{ opacity: 0, x: -20 }}
@@ -396,16 +399,16 @@ const ConnectionForm: React.FC = () => {
             </Select>
           </motion.div>
           
-          <motion.div className="flex items-center space-x-4" variants={itemVariants}>
+          <motion.div className="flex flex-col xs:flex-row gap-2 xs:gap-4" variants={itemVariants}>
             <div className="flex items-center space-x-2 bg-gray-800/60 p-2 rounded-lg border border-gray-700/50">
               <Switch 
                 id="retain-switch" 
                 checked={retain}
                 onCheckedChange={setRetain}
-                className="data-[state=checked]:bg-purple-600"
+                className="data-[state=checked]:bg-purple-600 h-4 w-7"
               />
-              <Label htmlFor="retain-switch" className="text-gray-300 flex items-center">
-                <i className="fas fa-thumbtack text-purple-400 mr-2"></i>
+              <Label htmlFor="retain-switch" className="text-gray-300 flex items-center text-xs sm:text-sm">
+                <i className="fas fa-thumbtack text-purple-400 mr-1 sm:mr-2"></i>
                 Retain
               </Label>
             </div>
@@ -416,11 +419,11 @@ const ConnectionForm: React.FC = () => {
                 checked={enableSysTopics}
                 onCheckedChange={setEnableSysTopics}
                 disabled={connectionStatus !== 'disconnected'}
-                className="data-[state=checked]:bg-teal-600"
+                className="data-[state=checked]:bg-teal-600 h-4 w-7"
               />
-              <Label htmlFor="sys-topics-switch" className="text-gray-300 flex items-center">
-                <i className="fas fa-cogs text-teal-400 mr-2"></i>
-                $SYS
+              <Label htmlFor="sys-topics-switch" className="text-gray-300 flex items-center text-xs sm:text-sm">
+                <i className="fas fa-cogs text-teal-400 mr-1 sm:mr-2"></i>
+                {isMobile ? '$SYS' : 'System Topics ($SYS)'}
               </Label>
             </div>
           </motion.div>
@@ -431,11 +434,11 @@ const ConnectionForm: React.FC = () => {
               <i className="fas fa-sliders-h text-blue-400 mr-2"></i>
               Connection Mode
             </Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-2">
               <Button 
                 type="button" 
                 variant="outline"
-                className={`transition-all duration-300 ease-in-out ${
+                className={`transition-all duration-300 ease-in-out text-xs sm:text-sm ${
                   connectionMode === 'connect-only' 
                     ? 'bg-gradient-to-r from-blue-600/70 to-blue-700/70 border-blue-500 text-white shadow-lg shadow-blue-900/30' 
                     : 'bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-gray-300'
@@ -443,13 +446,15 @@ const ConnectionForm: React.FC = () => {
                 onClick={() => handleConnectionModeSelect('connect-only')}
                 disabled={connectionStatus !== 'disconnected'}
               >
-                <i className={`fas fa-plug mr-2 ${connectionMode === 'connect-only' ? 'text-white' : 'text-blue-400'}`}></i> 
-                Connect Only
+                <i className={`fas fa-plug mr-1 sm:mr-2 ${connectionMode === 'connect-only' ? 'text-white' : 'text-blue-400'}`}></i> 
+                <span className="whitespace-nowrap">
+                  {isMobile ? 'Connect' : 'Connect Only'}
+                </span>
               </Button>
               <Button 
                 type="button" 
                 variant="outline"
-                className={`transition-all duration-300 ease-in-out ${
+                className={`transition-all duration-300 ease-in-out text-xs sm:text-sm ${
                   connectionMode === 'connect-auto' 
                     ? 'bg-gradient-to-r from-purple-600/70 to-purple-700/70 border-purple-500 text-white shadow-lg shadow-purple-900/30' 
                     : 'bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-gray-300'
@@ -457,22 +462,26 @@ const ConnectionForm: React.FC = () => {
                 onClick={() => handleConnectionModeSelect('connect-auto')}
                 disabled={connectionStatus !== 'disconnected'}
               >
-                <i className={`fas fa-random mr-2 ${connectionMode === 'connect-auto' ? 'text-white' : 'text-purple-400'}`}></i> 
-                Connect & Auto
+                <i className={`fas fa-random mr-1 sm:mr-2 ${connectionMode === 'connect-auto' ? 'text-white' : 'text-purple-400'}`}></i> 
+                <span className="whitespace-nowrap">
+                  {isMobile ? 'Auto' : 'Connect & Auto'}
+                </span>
               </Button>
               <Button 
                 type="button" 
                 variant="outline"
-                className={`transition-all duration-300 ease-in-out ${
+                className={`transition-all duration-300 ease-in-out text-xs sm:text-sm ${
                   connectionMode === 'connect-manual' 
                     ? 'bg-gradient-to-r from-teal-600/70 to-teal-700/70 border-teal-500 text-white shadow-lg shadow-teal-900/30' 
                     : 'bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-gray-300'
-                }`}
+                } ${isMobile && 'col-span-full'}`}
                 onClick={() => handleConnectionModeSelect('connect-manual')}
                 disabled={connectionStatus !== 'disconnected'}
               >
-                <i className={`fas fa-clock mr-2 ${connectionMode === 'connect-manual' ? 'text-white' : 'text-teal-400'}`}></i> 
-                Connect & Manual
+                <i className={`fas fa-clock mr-1 sm:mr-2 ${connectionMode === 'connect-manual' ? 'text-white' : 'text-teal-400'}`}></i> 
+                <span className="whitespace-nowrap">
+                  {isMobile ? 'Manual' : 'Connect & Manual'}
+                </span>
               </Button>
             </div>
           </motion.div>
@@ -480,7 +489,7 @@ const ConnectionForm: React.FC = () => {
         
         {/* Connection Buttons */}
         <motion.div 
-          className="flex space-x-3 pt-3"
+          className="flex gap-2 sm:gap-3 pt-3"
           variants={itemVariants}
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -499,7 +508,7 @@ const ConnectionForm: React.FC = () => {
                 <Button
                   id="connect-btn"
                   type="button" 
-                  className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white shadow-lg shadow-green-900/30 border border-green-500/50 relative overflow-hidden"
+                  className="w-full h-10 sm:h-auto py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white shadow-lg shadow-green-900/30 border border-green-500/50 relative overflow-hidden text-sm sm:text-base"
                   onClick={handleConnect}
                   disabled={!brokerUrl || !baseTopic}
                 >
@@ -514,7 +523,7 @@ const ConnectionForm: React.FC = () => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    <i className="fas fa-plug mr-2"></i> Connect
+                    <i className="fas fa-plug mr-1 sm:mr-2"></i> Connect
                   </motion.div>
                 </Button>
               </motion.div>
@@ -530,7 +539,7 @@ const ConnectionForm: React.FC = () => {
                 <Button
                   id="disconnect-btn"
                   type="button"
-                  className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white shadow-lg shadow-red-900/30 border border-red-500/50 relative overflow-hidden"
+                  className="w-full h-10 sm:h-auto py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white shadow-lg shadow-red-900/30 border border-red-500/50 relative overflow-hidden text-sm sm:text-base"
                   onClick={disconnect}
                 >
                   <motion.span 
@@ -544,7 +553,7 @@ const ConnectionForm: React.FC = () => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    <i className="fas fa-power-off mr-2"></i> Disconnect
+                    <i className="fas fa-power-off mr-1 sm:mr-2"></i> Disconnect
                   </motion.div>
                 </Button>
               </motion.div>
