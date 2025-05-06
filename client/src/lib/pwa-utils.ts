@@ -40,25 +40,30 @@ export function registerServiceWorker() {
 export function checkForAppUpdate(callback: () => void) {
   if (!wb) return;
 
-  // Add an update found listener
-  wb.addEventListener('updatefound', () => {
-    if (registration && registration.installing) {
-      registration.installing.addEventListener('statechange', (e) => {
-        if ((e.target as ServiceWorker).state === 'installed' && navigator.serviceWorker.controller) {
-          // New version is installed but waiting
-          callback();
-        }
-      });
+  if (registration && registration.installing) {
+    registration.installing.addEventListener('statechange', (e) => {
+      if ((e.target as ServiceWorker).state === 'installed' && navigator.serviceWorker.controller) {
+        // New version is installed but waiting
+        callback();
+      }
+    });
+  }
+
+  // Check for updates - this will trigger 'installing' to be set if an update is found
+  wb.update().catch(err => console.error('Error checking for updates:', err));
+
+  // Listen for future updates
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
     }
   });
-
-  // Check for updates
-  wb.update();
 }
 
 // Function to install PWA
 export function promptInstall(callback: (outcome: boolean) => void) {
-  let deferredPrompt: any;
+  let deferredPrompt: any = null;
 
   // Capture install prompt
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -101,8 +106,10 @@ export function isRunningAsPwa(): boolean {
 }
 
 // Send message to service worker
-export function sendMessageToSW(message: any) {
+export function sendMessageToSW(message: any): void {
   if (registration && registration.active) {
-    messageSW(registration.active, message);
+    messageSW(registration.active, message).catch(err => {
+      console.error('Error sending message to Service Worker:', err);
+    });
   }
 }
