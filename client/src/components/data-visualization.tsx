@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { useMqtt, MqttMessage } from '@/hooks/use-mqtt';
 import { useCharts } from '@/hooks/use-charts';
+import { useMobile } from '@/hooks/use-mobile';
 import { motion, AnimatePresence } from 'framer-motion';
 import Chart from 'chart.js/auto';
 import ChartSettingsPanel from './chart-settings-panel';
@@ -603,34 +604,39 @@ const DataVisualization: React.FC = () => {
     );
   }
 
+  const isMobile = useMobile();
+
   return (
     <motion.div 
-      className="glass-card neon-border rounded-lg shadow-xl p-6 mb-6"
+      className="glass-card neon-border rounded-lg shadow-xl p-4 sm:p-6 mb-6"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
       <motion.div 
-        className="flex flex-col md:flex-row justify-between items-start md:items-center mb-5"
+        className="flex flex-col justify-between items-start mb-5"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
         <motion.h2 
-          className="font-heading text-xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-3 md:mb-0"
+          className="font-heading text-xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-3"
           variants={itemVariants}
         >
           Data Visualization
         </motion.h2>
         
-        <motion.div className="flex flex-wrap gap-3" variants={itemVariants}>
-          <div className="flex items-center space-x-2 bg-gray-800/60 px-3 py-2 rounded-md shadow-inner">
-            <Label className="text-sm text-gray-300">Chart Type:</Label>
+        <motion.div 
+          className="w-full grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:flex md:flex-wrap gap-2 md:gap-3" 
+          variants={itemVariants}
+        >
+          <div className="flex items-center space-x-2 bg-gray-800/60 px-2 sm:px-3 py-2 rounded-md shadow-inner">
+            <Label className="text-xs sm:text-sm text-gray-300 whitespace-nowrap">Chart:</Label>
             <Select value={chartType} onValueChange={handleChartTypeChange}>
-              <SelectTrigger className="bg-gray-800/80 border-gray-700 focus:border-purple-500 w-32 shadow-inner">
+              <SelectTrigger className="bg-gray-800/80 border-gray-700 focus:border-purple-500 w-24 sm:w-32 text-xs sm:text-sm shadow-inner">
                 <SelectValue placeholder="Chart Type" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectContent className="bg-gray-800 border-gray-700 text-xs sm:text-sm">
                 <SelectItem value="line" className="hover:bg-gray-700">Line</SelectItem>
                 <SelectItem value="bar" className="hover:bg-gray-700">Bar</SelectItem>
                 <SelectItem value="radar" className="hover:bg-gray-700">Radar</SelectItem>
@@ -640,14 +646,14 @@ const DataVisualization: React.FC = () => {
             </Select>
           </div>
           
-          <div className="flex items-center space-x-2 bg-gray-800/60 px-3 py-2 rounded-md shadow-inner">
-            <Label className="text-sm text-gray-300">Chart Color:</Label>
+          <div className="flex items-center space-x-2 bg-gray-800/60 px-2 sm:px-3 py-2 rounded-md shadow-inner">
+            <Label className="text-xs sm:text-sm text-gray-300 whitespace-nowrap">Color:</Label>
             <div className="relative">
               <Input 
                 type="color" 
                 value={chartColor} 
                 onChange={(e) => handleColorChange(e.target.value)}
-                className="bg-transparent h-8 w-10 rounded cursor-pointer p-0 border-none"
+                className="bg-transparent h-6 sm:h-8 w-8 sm:w-10 rounded cursor-pointer p-0 border-none"
               />
               <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-current rounded-full" style={{ color: chartColor }}></div>
             </div>
@@ -660,27 +666,56 @@ const DataVisualization: React.FC = () => {
           <Button
             variant="destructive"
             size="sm"
-            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 shadow-lg shadow-red-900/30"
+            className={`bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 shadow-lg shadow-red-900/30 text-xs sm:text-sm ${isMobile ? 'w-full' : ''}`}
             onClick={handleClearAllCharts}
             disabled={charts.length === 0}
           >
-            <i className="fas fa-trash-alt mr-1"></i> Clear All Charts
+            <i className="fas fa-trash-alt mr-1"></i> {isMobile ? 'Clear All' : 'Clear All Charts'}
           </Button>
         </motion.div>
       </motion.div>
       
       {/* Data Key Selection */}
       <motion.div 
-        className="glass-card bg-gray-900/70 rounded-lg p-4 mb-5"
+        className="glass-card bg-gray-900/70 rounded-lg p-3 sm:p-4 mb-5"
         variants={itemVariants}
       >
-        <h3 className="font-medium text-lg mb-3 text-blue-300">Select Data to Chart</h3>
-        <div className="flex flex-wrap gap-3">
+        <h3 className="font-medium text-lg mb-2 sm:mb-3 text-blue-300">Select Data to Chart</h3>
+        
+        {/* Mobile-optimized key selection dropdown when on small screens */}
+        {isMobile && dataKeys.length > 6 && (
+          <div className="mb-3">
+            <Select 
+              onValueChange={(value) => {
+                const key = dataKeys.find(k => k.path === value);
+                if (key) {
+                  handleKeyToggle(key.path, !key.selected);
+                }
+              }}
+            >
+              <SelectTrigger className="w-full bg-gray-800/80 border-gray-700 text-sm">
+                <SelectValue placeholder="Quick select data key..." />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700 max-h-[300px]">
+                {dataKeys.map((key) => (
+                  <SelectItem key={key.path} value={key.path}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full ${key.selected ? 'bg-purple-500' : 'bg-gray-600'}`}></div>
+                      {key.path}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           <AnimatePresence>
             {dataKeys.map((key) => (
               <motion.div 
                 key={key.path}
-                className={`flex items-center space-x-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${
+                className={`flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1.5 rounded-full border text-xs sm:text-sm transition-all duration-300 ${
                   key.selected 
                     ? 'bg-purple-900/30 border-purple-500/50 shadow-[0_0_8px_rgba(168,85,247,0.4)]' 
                     : 'bg-gray-800/60 border-gray-700/50'
@@ -693,9 +728,14 @@ const DataVisualization: React.FC = () => {
                   id={`key-${key.path}`}
                   checked={key.selected}
                   onCheckedChange={(checked) => handleKeyToggle(key.path, checked === true)}
-                  className={key.selected ? "text-purple-400" : ""}
+                  className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${key.selected ? "text-purple-400" : ""}`}
                 />
-                <Label htmlFor={`key-${key.path}`} className="cursor-pointer">{key.path}</Label>
+                <Label 
+                  htmlFor={`key-${key.path}`} 
+                  className="cursor-pointer text-xs sm:text-sm whitespace-nowrap"
+                >
+                  {key.path}
+                </Label>
               </motion.div>
             ))}
           </AnimatePresence>
