@@ -1,0 +1,153 @@
+I. Core MQTT Functionality:
+Connection Management:
+Connect to MQTT broker via WebSockets (wss:// or ws://).
+Supports username/password authentication.
+"Connect Only" mode (establishes connection, subscribes to base topic and $SYS if enabled).
+"Connect & Auto" mode (connects and starts automatic publishing of random JSON messages).
+"Connect & Start Manual Interval" mode (connects and starts publishing a user-defined JSON message at a set interval).
+Disconnect from broker.
+Automatic reconnect attempts on connection loss.
+Configurable QoS (0, 1, 2) and Retain flag for published messages.
+Publishing:
+Automatic Random Publishing:
+Publishes randomly generated JSON data (simulating sensor metrics like temp, humid, press, lux, voltage, status).
+Configurable interval via a slider (1-60 seconds).
+Publishes to a user-defined "Base Topic".
+Manual Publishing:
+Publish a custom JSON message once.
+Publish a custom JSON message at a user-defined interval (slider, 1-60 seconds).
+Publishes to the "Base Topic".
+Rule-Based Publishing: Rules can trigger MQTT messages to be published to a specified topic, with defined payload, QoS, and retain flag.
+Subscribing:
+Automatic subscription to the "Base Topic" on connection.
+Dynamic Subscriptions:
+Add new topic subscriptions (with specific QoS) while connected.
+Remove active dynamic subscriptions.
+List of active dynamic subscriptions displayed.
+$SYS Topic Subscription:
+Optional setting to subscribe to common $SYS broker status topics (e.g., version, uptime, client counts, message counts, load).
+Displays $SYS data in a dedicated panel.
+Message Handling:
+Receives messages from subscribed topics.
+Displays incoming messages in a "Live Sensor Data Feed".
+Parses JSON payloads for further processing (AI insights, visualization, rules).
+Handles non-JSON payloads gracefully (displays as raw text).
+II. Data Management & Persistence:
+Connection Profiles:
+Save current connection settings (Broker URL, Base Topic, Username, Password) as a named profile.
+Load saved profiles to quickly populate connection form fields.
+Manage (list, load, delete) saved profiles.
+Stored in localStorage.
+Message Templates (for Manual Publishing):
+Save the current manual JSON message as a named template.
+Load saved templates into the manual message area.
+Manage (list by name, delete) saved templates.
+Stored in localStorage.
+Message History (IndexedDB):
+Stores all received non-$SYS messages (timestamp, topic, payload) in IndexedDB for persistence.
+Filter history by:
+Start and End datetime.
+Topic (contains).
+Payload content (contains).
+Load and display filtered history in a table.
+Export history to CSV or JSON format.
+Clear all message history from IndexedDB.
+Payload display format toggle (JSON pretty-print / Raw text).
+General Settings Persistence:
+Saves QoS, Retain, notification preferences, $SYS subscription, theme, and advanced JSON settings to localStorage.
+Loads these settings on startup.
+Export/Import All Data:
+Export all user data (profiles, templates, rules, general settings) into a single JSON file.
+Import settings from a JSON file, overwriting existing data after confirmation.
+Features custom animated download/import buttons.
+III. Data Visualization (Multi-Chart System):
+Dynamic Key Discovery:
+Automatically discovers numeric keys (including nested ones like metrics.temp) from incoming JSON messages.
+Presents these keys as checkboxes for users to select which data to chart.
+Multiple Dynamic Charts:
+Creates a separate, individual chart instance for each key selected by the user.
+Each chart displays data only for its specific key.
+Charts are added/removed dynamically based on checkbox selection.
+Chart Configuration (per chart, but defaults from global):
+Chart Types: Line, Bar, Radar, Pie, Doughnut (default configurable globally, applies to new charts).
+Colors: Default color for new charts configurable via a color picker. Each chart uses this color (or could be made distinct per chart if enhanced).
+Max data points per chart (currently 40).
+Individual Chart Features:
+Displays the data key as the chart title.
+Real-time updates as new data arrives for the specific key.
+Displays statistics for its data: Min, Max, Avg, Last value.
+"Clear Data" button for each individual chart (removes it).
+Global Controls:
+"Clear All Charts" button.
+Default chart type selector (updates existing charts if changed).
+Default chart color picker.
+Integration: Uses Chart.js library.
+Theme Awareness: Chart colors (grids, ticks, tooltips) adapt to light/dark theme.
+IV. AI & Rule-Based Analysis:
+Basic AI Insights:
+Provides simple, immediate insights based on the latest received message (e.g., number of keys, sensor status 'error'/'warn', high/low temperature).
+User-Defined Rules Engine:
+Rule Creation:
+Define rules with a name.
+Rule Types:
+Threshold Check (current): on a specific data key (e.g., metrics.temp).
+Operators: >, <, >=, <=, ==, !=.
+Value: numeric or string.
+(Placeholders for Rate of Change, Time Since Last Msg).
+Rule Actions:
+Show Alert: with a specified level (Warn, Error, Info) and message.
+Publish MQTT Message: to a specified topic, with a JSON payload, QoS, and retain flag.
+Rule Management:
+List active rules with their conditions and actions.
+Delete rules.
+Rules stored in localStorage.
+Rule Evaluation:
+Automatically evaluates rules against each new incoming (non-$SYS) message.
+Manual "Run Analysis" button to evaluate rules against the latest stored message.
+Displays rule analysis results (violations or "SYSTEM NOMINAL").
+Alerting System:
+Displays rule-triggered alerts in a fixed panel (top-right).
+Alerts have levels (Error, Warn, Info) and include the rule name and message.
+Option to dismiss individual alerts.
+"Clear Alerts" button to dismiss all.
+Optional alert sounds.
+V. User Interface & User Experience (UI/UX):
+Responsive Design: Adapts to different screen sizes (using Tailwind CSS).
+Theming:
+Dark theme (default).
+Light theme (toggleable).
+Theme preference saved.
+CSS variables used extensively for theming.
+Navigation: Tab-based navigation for different sections (Home, AI & Rules, Viz, History, Settings, etc.).
+Visual Feedback:
+Connection status, publishing status, last published time, received message count displayed clearly.
+GSAP animations for page/panel transitions.
+Visual indication of active/disabled buttons.
+Animated "button-57" style.
+Animated download/import buttons.
+Live Data Feed:
+Scrollable live feed of incoming messages.
+Timestamp, topic, and payload displayed.
+Option to pause/resume auto-scrolling.
+Option to format payload display as pretty-printed JSON or raw text.
+"Clear Feed" button.
+Notifications:
+Toast-style notifications for important events (connected, disconnected, message published, errors, settings saved, etc.).
+Notification types: Info, Success, Error, Warn, Connecting (with icons).
+Option to disable toast notifications.
+Forms:
+Floating labels for text inputs and selects.
+Custom styled checkboxes and sliders.
+"Reset Form" button on the Home page.
+Progressive Web App (PWA):
+Includes manifest.json and service worker registration.
+Installable on supported devices.
+Accessibility & Usability:
+FontAwesome icons for clarity.
+Keyboard shortcuts (Ctrl+Alt+C for Connect, Ctrl+Alt+D for Disconnect).
+Content organization into logical panels.
+Aesthetics:
+Modern, "hacker/tech" aesthetic with "Space Grotesk" and "Orbitron" fonts.
+Animated background (grid, stars).
+Neon pulse effect on the main title.
+Custom scrollbars.
