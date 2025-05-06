@@ -1,6 +1,6 @@
 {
-  "name": "MQTT Insight",
-  "short_name": "MQTT Insight",
+  "name": "MQTT Explorer",
+  "short_name": "MQTT Explorer",
   "description": "Advanced MQTT client with visualization and data analysis",
   "start_url": "/",
   "display": "standalone",

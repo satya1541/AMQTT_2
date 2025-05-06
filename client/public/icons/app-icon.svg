@@ -3,30 +3,41 @@
   <!-- Background -->
   <rect width="512" height="512" rx="100" fill="#121212"/>
   
+  <!-- Purple glow effect -->
+  <circle cx="256" cy="256" r="200" fill="url(#purple-glow)" opacity="0.4"/>
+  
   <!-- MQTT Icon - Stylized M -->
-  <path d="M130 120C130 114.477 134.477 110 140 110H170C175.523 110 180 114.477 180 120V300C180 305.523 175.523 310 170 310H140C134.477 310 130 305.523 130 300V120Z" fill="#3B82F6"/>
+  <path d="M130 120C130 114.477 134.477 110 140 110H170C175.523 110 180 114.477 180 120V300C180 305.523 175.523 310 170 310H140C134.477 310 130 305.523 130 300V120Z" fill="#9D5CFF"/>
   
   <!-- Q glyph -->
   <circle cx="256" cy="210" r="80" fill="#8B5CF6"/>
   <circle cx="256" cy="210" r="40" fill="#121212"/>
-  <path d="M300 254L330 284" stroke="#8B5CF6" stroke-width="30" stroke-linecap="round"/>
+  <path d="M300 254L330 284" stroke="#9D5CFF" stroke-width="30" stroke-linecap="round"/>
   
   <!-- T glyph -->
-  <path d="M332 120C332 114.477 336.477 110 342 110H402C407.523 110 412 114.477 412 120V150C412 155.523 407.523 160 402 160H342C336.477 160 332 155.523 332 150V120Z" fill="#06B6D4"/>
-  <path d="M356 124V300C356 305.523 360.477 310 366 310H386C391.523 310 396 305.523 396 300V124" stroke="#06B6D4" stroke-width="30" stroke-linecap="round"/>
+  <path d="M332 120C332 114.477 336.477 110 342 110H402C407.523 110 412 114.477 412 120V150C412 155.523 407.523 160 402 160H342C336.477 160 332 155.523 332 150V120Z" fill="#A855F7"/>
+  <path d="M356 124V300C356 305.523 360.477 310 366 310H386C391.523 310 396 305.523 396 300V124" stroke="#A855F7" stroke-width="30" stroke-linecap="round"/>
   
   <!-- Data flow lines -->
-  <path d="M110 370C110 365.582 113.582 362 118 362H394C398.418 362 402 365.582 402 370V370C402 374.418 398.418 378 394 378H118C113.582 378 110 374.418 110 370V370Z" fill="#10B981"/>
-  <path d="M120 402C120 397.582 123.582 394 128 394H384C388.418 394 392 397.582 392 402V402C392 406.418 388.418 410 384 410H128C123.582 410 120 406.418 120 402V402Z" fill="#10B981"/>
+  <path d="M110 370C110 365.582 113.582 362 118 362H394C398.418 362 402 365.582 402 370V370C402 374.418 398.418 378 394 378H118C113.582 378 110 374.418 110 370V370Z" fill="#9D5CFF" opacity="0.7"/>
+  <path d="M120 402C120 397.582 123.582 394 128 394H384C388.418 394 392 397.582 392 402V402C392 406.418 388.418 410 384 410H128C123.582 410 120 406.418 120 402V402Z" fill="#9D5CFF" opacity="0.7"/>
   
   <!-- Pulse animation line -->
-  <path d="M136 342C136 337.582 139.582 334 144 334H368C372.418 334 376 337.582 376 342V342C376 346.418 372.418 350 368 350H144C139.582 350 136 346.418 136 342V342Z" fill="#F472B6"/>
+  <path d="M136 342C136 337.582 139.582 334 144 334H368C372.418 334 376 337.582 376 342V342C376 346.418 372.418 350 368 350H144C139.582 350 136 346.418 136 342V342Z" fill="#9D5CFF" opacity="0.8"/>
   
   <!-- Chart dots -->
-  <circle cx="160" cy="342" r="8" fill="#F97316"/>
-  <circle cx="200" cy="342" r="8" fill="#F97316"/>
-  <circle cx="240" cy="342" r="8" fill="#F97316"/>
-  <circle cx="280" cy="342" r="8" fill="#F97316"/>
-  <circle cx="320" cy="342" r="8" fill="#F97316"/>
-  <circle cx="360" cy="342" r="8" fill="#F97316"/>
+  <circle cx="160" cy="342" r="8" fill="#C084FC"/>
+  <circle cx="200" cy="342" r="8" fill="#C084FC"/>
+  <circle cx="240" cy="342" r="8" fill="#C084FC"/>
+  <circle cx="280" cy="342" r="8" fill="#C084FC"/>
+  <circle cx="320" cy="342" r="8" fill="#C084FC"/>
+  <circle cx="360" cy="342" r="8" fill="#C084FC"/>
+  
+  <!-- Gradient Definitions -->
+  <defs>
+    <radialGradient id="purple-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(256 256) rotate(90) scale(200)">
+      <stop offset="0" stop-color="#A855F7"/>
+      <stop offset="1" stop-color="#121212" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
 </svg>
