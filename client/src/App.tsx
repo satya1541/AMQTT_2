@@ -10,6 +10,10 @@ import History from "@/pages/history";
 import Settings from "@/pages/settings";
 import AppHeader from "@/components/app-header";
 import { useEffect } from "react";
+import { MQTTProvider } from "@/hooks/use-mqtt";
+import { ThemeProvider } from "@/hooks/use-theme";
+import { RulesProvider } from "@/hooks/use-rules";
+import { ChartsProvider } from "@/hooks/use-charts";
 
 function Router() {
   const [location] = useLocation();
@@ -64,8 +68,16 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Router />
-      <Toaster />
+      <ThemeProvider>
+        <MQTTProvider>
+          <RulesProvider>
+            <ChartsProvider>
+              <Router />
+              <Toaster />
+            </ChartsProvider>
+          </RulesProvider>
+        </MQTTProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

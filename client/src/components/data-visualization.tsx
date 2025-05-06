@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { useMqtt, MqttMessage } from '@/hooks/use-mqtt';
 import { useCharts } from '@/hooks/use-charts';
+import { motion, AnimatePresence } from 'framer-motion';
 import Chart from 'chart.js/auto';
 
 interface DataKey {
@@ -307,136 +308,250 @@ const DataVisualization: React.FC = () => {
     return num.toFixed(decimals);
   };
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { 
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.3
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { 
+      opacity: 1, 
+      y: 0,
+      transition: { duration: 0.5 }
+    }
+  };
+
   // Render no data message if needed
   if (dataKeys.length === 0) {
     return (
-      <div className="bg-gray-800 rounded-lg shadow-xl p-4 mb-6">
-        <h2 className="font-heading text-xl text-blue-400 mb-4">Data Visualization</h2>
-        <div className="p-8 text-center text-gray-400">
-          <i className="fas fa-chart-line text-4xl mb-4 text-gray-600"></i>
-          <h3 className="text-xl font-medium mb-2">No Data Available</h3>
-          <p>Connect to an MQTT broker and receive JSON messages with numeric values to visualize data.</p>
-        </div>
-      </div>
+      <motion.div 
+        className="glass-card neon-border rounded-lg shadow-xl p-6 mb-6"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <h2 className="font-heading text-xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-4">Data Visualization</h2>
+        <motion.div 
+          className="p-8 text-center text-gray-300"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.6 }}
+        >
+          <motion.div 
+            className="w-24 h-24 mx-auto mb-6 rounded-full bg-gray-800/50 flex items-center justify-center"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.7, type: "spring" }}
+          >
+            <i className="fas fa-chart-line text-4xl text-purple-400"></i>
+          </motion.div>
+          <motion.h3 
+            className="text-xl font-medium mb-3 text-blue-300"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7, duration: 0.5 }}
+          >
+            No Data Available
+          </motion.h3>
+          <motion.p 
+            className="text-gray-400"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8, duration: 0.5 }}
+          >
+            Connect to an MQTT broker and receive JSON messages with numeric values to visualize data.
+          </motion.p>
+        </motion.div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg shadow-xl p-4 mb-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-        <h2 className="font-heading text-xl text-blue-400 mb-2 md:mb-0">Data Visualization</h2>
+    <motion.div 
+      className="glass-card neon-border rounded-lg shadow-xl p-6 mb-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <motion.div 
+        className="flex flex-col md:flex-row justify-between items-start md:items-center mb-5"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.h2 
+          className="font-heading text-xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-3 md:mb-0"
+          variants={itemVariants}
+        >
+          Data Visualization
+        </motion.h2>
         
-        <div className="flex flex-wrap gap-2">
-          <div className="flex items-center space-x-2">
-            <Label className="text-sm text-gray-400">Chart Type:</Label>
+        <motion.div className="flex flex-wrap gap-3" variants={itemVariants}>
+          <div className="flex items-center space-x-2 bg-gray-800/60 px-3 py-2 rounded-md shadow-inner">
+            <Label className="text-sm text-gray-300">Chart Type:</Label>
             <Select value={chartType} onValueChange={handleChartTypeChange}>
-              <SelectTrigger className="bg-gray-700 text-white rounded px-2 py-1 text-sm border border-gray-600 w-32">
+              <SelectTrigger className="bg-gray-800/80 border-gray-700 focus:border-purple-500 w-32 shadow-inner">
                 <SelectValue placeholder="Chart Type" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="line">Line</SelectItem>
-                <SelectItem value="bar">Bar</SelectItem>
-                <SelectItem value="radar">Radar</SelectItem>
-                <SelectItem value="pie">Pie</SelectItem>
-                <SelectItem value="doughnut">Doughnut</SelectItem>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectItem value="line" className="hover:bg-gray-700">Line</SelectItem>
+                <SelectItem value="bar" className="hover:bg-gray-700">Bar</SelectItem>
+                <SelectItem value="radar" className="hover:bg-gray-700">Radar</SelectItem>
+                <SelectItem value="pie" className="hover:bg-gray-700">Pie</SelectItem>
+                <SelectItem value="doughnut" className="hover:bg-gray-700">Doughnut</SelectItem>
               </SelectContent>
             </Select>
           </div>
           
-          <div className="flex items-center space-x-2">
-            <Label className="text-sm text-gray-400">Chart Color:</Label>
-            <Input 
-              type="color" 
-              value={chartColor} 
-              onChange={(e) => handleColorChange(e.target.value)}
-              className="bg-transparent h-8 w-10 rounded cursor-pointer p-0 border-none"
-            />
+          <div className="flex items-center space-x-2 bg-gray-800/60 px-3 py-2 rounded-md shadow-inner">
+            <Label className="text-sm text-gray-300">Chart Color:</Label>
+            <div className="relative">
+              <Input 
+                type="color" 
+                value={chartColor} 
+                onChange={(e) => handleColorChange(e.target.value)}
+                className="bg-transparent h-8 w-10 rounded cursor-pointer p-0 border-none"
+              />
+              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-current rounded-full" style={{ color: chartColor }}></div>
+            </div>
           </div>
           
           <Button
             variant="destructive"
             size="sm"
+            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 shadow-lg shadow-red-900/30"
             onClick={handleClearAllCharts}
             disabled={charts.length === 0}
           >
             <i className="fas fa-trash-alt mr-1"></i> Clear All Charts
           </Button>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
       
       {/* Data Key Selection */}
-      <div className="bg-gray-900 rounded-lg p-4 mb-4">
-        <h3 className="font-medium text-lg mb-2">Select Data to Chart:</h3>
+      <motion.div 
+        className="glass-card bg-gray-900/70 rounded-lg p-4 mb-5"
+        variants={itemVariants}
+      >
+        <h3 className="font-medium text-lg mb-3 text-blue-300">Select Data to Chart</h3>
         <div className="flex flex-wrap gap-3">
-          {dataKeys.map((key) => (
-            <div key={key.path} className="flex items-center space-x-2 bg-gray-800 px-3 py-1.5 rounded-full">
-              <Checkbox 
-                id={`key-${key.path}`}
-                checked={key.selected}
-                onCheckedChange={(checked) => handleKeyToggle(key.path, checked === true)}
-              />
-              <Label htmlFor={`key-${key.path}`} className="cursor-pointer">{key.path}</Label>
-            </div>
-          ))}
+          <AnimatePresence>
+            {dataKeys.map((key) => (
+              <motion.div 
+                key={key.path}
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-full border transition-all duration-300 ${
+                  key.selected 
+                    ? 'bg-purple-900/30 border-purple-500/50 shadow-[0_0_8px_rgba(168,85,247,0.4)]' 
+                    : 'bg-gray-800/60 border-gray-700/50'
+                }`}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Checkbox 
+                  id={`key-${key.path}`}
+                  checked={key.selected}
+                  onCheckedChange={(checked) => handleKeyToggle(key.path, checked === true)}
+                  className={key.selected ? "text-purple-400" : ""}
+                />
+                <Label htmlFor={`key-${key.path}`} className="cursor-pointer">{key.path}</Label>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
-      </div>
+      </motion.div>
       
       {/* Charts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {charts.map((chartData) => (
-          <div key={chartData.id} className="bg-gray-900 rounded-lg p-4">
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="font-medium">{chartData.key}</h4>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-red-400 hover:text-red-300 h-8 w-8 p-0"
-                onClick={() => handleKeyToggle(chartData.key, false)}
-              >
-                <i className="fas fa-times"></i>
-              </Button>
-            </div>
-            
-            {/* Chart Canvas */}
-            <div className="bg-gray-800 rounded h-60 mb-2 p-2">
-              <canvas 
-                ref={(el) => {
-                  chartRefs.current.set(chartData.id, el);
-                }}
-              />
-            </div>
-            
-            {/* Statistics */}
-            <div className="grid grid-cols-4 gap-2 text-center text-sm">
-              <div className="bg-gray-800 rounded p-1">
-                <div className="text-gray-400">Min</div>
-                <div className="font-mono">{formatNumber(chartData.min)}</div>
+      <motion.div 
+        className="grid grid-cols-1 md:grid-cols-2 gap-6"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <AnimatePresence>
+          {charts.map((chartData) => (
+            <motion.div 
+              key={chartData.id} 
+              className="glass-card bg-gray-900/70 rounded-lg p-5 transition-all duration-300 hover:shadow-[0_0_15px_rgba(168,85,247,0.3)]"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.5 }}
+              layout
+            >
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="font-medium text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">{chartData.key}</h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-400 hover:text-red-300 hover:bg-red-950/30 h-8 w-8 p-0 rounded-full"
+                  onClick={() => handleKeyToggle(chartData.key, false)}
+                >
+                  <i className="fas fa-times"></i>
+                </Button>
               </div>
-              <div className="bg-gray-800 rounded p-1">
-                <div className="text-gray-400">Max</div>
-                <div className="font-mono">{formatNumber(chartData.max)}</div>
+              
+              {/* Chart Canvas */}
+              <div className="bg-gray-800/60 rounded-lg h-60 mb-3 p-3 shadow-inner border border-gray-700/50">
+                <canvas 
+                  ref={(el) => {
+                    chartRefs.current.set(chartData.id, el);
+                  }}
+                />
               </div>
-              <div className="bg-gray-800 rounded p-1">
-                <div className="text-gray-400">Avg</div>
-                <div className="font-mono">{formatNumber(chartData.avg)}</div>
+              
+              {/* Statistics */}
+              <div className="grid grid-cols-4 gap-3 text-center text-sm">
+                <div className="bg-gray-800/70 rounded-lg p-2 border border-gray-700/30">
+                  <div className="text-gray-400 mb-1">Min</div>
+                  <div className="font-mono text-blue-300">{formatNumber(chartData.min)}</div>
+                </div>
+                <div className="bg-gray-800/70 rounded-lg p-2 border border-gray-700/30">
+                  <div className="text-gray-400 mb-1">Max</div>
+                  <div className="font-mono text-purple-300">{formatNumber(chartData.max)}</div>
+                </div>
+                <div className="bg-gray-800/70 rounded-lg p-2 border border-gray-700/30">
+                  <div className="text-gray-400 mb-1">Avg</div>
+                  <div className="font-mono text-teal-300">{formatNumber(chartData.avg)}</div>
+                </div>
+                <div className="bg-gray-800/70 rounded-lg p-2 border border-gray-700/30">
+                  <div className="text-gray-400 mb-1">Last</div>
+                  <div className="font-mono text-amber-300">{formatNumber(chartData.last)}</div>
+                </div>
               </div>
-              <div className="bg-gray-800 rounded p-1">
-                <div className="text-gray-400">Last</div>
-                <div className="font-mono">{formatNumber(chartData.last)}</div>
-              </div>
-            </div>
-          </div>
-        ))}
+            </motion.div>
+          ))}
+        </AnimatePresence>
         
         {charts.length === 0 && (
-          <div className="md:col-span-2 p-8 text-center text-gray-400 bg-gray-900 rounded-lg">
-            <i className="fas fa-chart-bar text-3xl mb-2 text-gray-600"></i>
-            <h3 className="text-lg font-medium mb-2">No Charts Selected</h3>
-            <p>Select data points from the checkboxes above to create charts.</p>
-          </div>
+          <motion.div 
+            className="md:col-span-2 p-8 text-center text-gray-300 glass-card bg-gray-900/50 rounded-lg border border-gray-700/30"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <motion.div 
+              className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center"
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 200 }}
+            >
+              <i className="fas fa-chart-bar text-2xl text-indigo-400"></i>
+            </motion.div>
+            <h3 className="text-lg font-medium mb-2 text-blue-300">No Charts Selected</h3>
+            <p className="text-gray-400">Select data points from the checkboxes above to create charts.</p>
+          </motion.div>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
