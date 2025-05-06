@@ -9,6 +9,8 @@ import { useMqtt, MqttMessage } from '@/hooks/use-mqtt';
 import { useCharts } from '@/hooks/use-charts';
 import { motion, AnimatePresence } from 'framer-motion';
 import Chart from 'chart.js/auto';
+import ChartSettingsPanel from './chart-settings-panel';
+import ChartExportPanel from './chart-export-panel';
 
 interface DataKey {
   path: string;
@@ -30,11 +32,11 @@ interface ChartData {
 
 const DataVisualization: React.FC = () => {
   const { messages } = useMqtt();
+  const { settings: chartSettings, updateSettings } = useCharts();
   const [dataKeys, setDataKeys] = useState<DataKey[]>([]);
   const [charts, setCharts] = useState<ChartData[]>([]);
-  const [chartType, setChartType] = useState<string>('line');
-  const [chartColor, setChartColor] = useState<string>('#8B5CF6');
-  const maxDataPoints = 40;
+  const [chartType, setChartType] = useState<string>(chartSettings.defaultType);
+  const [chartColor, setChartColor] = useState<string>(chartSettings.defaultColor);
   
   const chartRefs = useRef<Map<string, HTMLCanvasElement | null>>(new Map());
 
@@ -134,33 +136,46 @@ const DataVisualization: React.FC = () => {
             label: chartData.key,
             data: chartData.data,
             borderColor: chartData.color,
-            backgroundColor: `${chartData.color}20`,
-            tension: 0.4,
+            backgroundColor: `${chartData.color}${Math.round(chartSettings.fillOpacity * 255).toString(16).padStart(2, '0')}`,
+            tension: chartSettings.tension,
+            borderWidth: chartSettings.borderWidth,
+            pointRadius: chartSettings.pointRadius,
+            pointHoverRadius: chartSettings.pointHoverRadius,
             fill: true
           }]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: chartSettings.showLegend
+            }
+          },
           scales: chartData.type === 'line' || chartData.type === 'bar' ? {
             x: {
               type: 'linear',
               position: 'bottom',
               min: 0,
-              max: maxDataPoints - 1,
+              max: chartSettings.maxDataPoints - 1,
               ticks: {
                 display: false
               },
               grid: {
-                display: false
+                display: chartSettings.showGrid
               }
             },
             y: {
-              beginAtZero: true
+              beginAtZero: true,
+              min: chartSettings.autoScale ? undefined : chartSettings.yAxisMin,
+              max: chartSettings.autoScale ? undefined : chartSettings.yAxisMax,
+              grid: {
+                display: chartSettings.showGrid
+              }
             }
           } : undefined,
           animation: {
-            duration: 300
+            duration: chartSettings.animation ? 300 : 0
           }
         }
       });
@@ -239,8 +254,8 @@ const DataVisualization: React.FC = () => {
           // Add new data point
           const newData = [...chartData.data, { x: chartData.data.length, y: value }];
           
-          // Keep only the last maxDataPoints
-          const truncatedData = newData.slice(-maxDataPoints);
+          // Keep only the last maxDataPoints from settings
+          const truncatedData = newData.slice(-chartSettings.maxDataPoints);
           
           // Recalculate statistics
           const values = truncatedData.map(d => d.y);
@@ -423,6 +438,10 @@ const DataVisualization: React.FC = () => {
               <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-current rounded-full" style={{ color: chartColor }}></div>
             </div>
           </div>
+          
+          <ChartSettingsPanel />
+          
+          <ChartExportPanel chartRefs={chartRefs} />
           
           <Button
             variant="destructive"

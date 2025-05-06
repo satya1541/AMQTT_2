@@ -6,6 +6,18 @@ interface ChartSettings {
   defaultType: string;
   defaultColor: string;
   maxDataPoints: number;
+  timeFormat: 'relative' | 'absolute';
+  showLegend: boolean;
+  animation: boolean;
+  fillOpacity: number;
+  borderWidth: number;
+  tension: number;
+  pointRadius: number;
+  pointHoverRadius: number;
+  yAxisMin: number | null;
+  yAxisMax: number | null;
+  showGrid: boolean;
+  autoScale: boolean;
 }
 
 interface ChartData {
@@ -34,7 +46,19 @@ interface ChartsContextType {
 const initialSettings: ChartSettings = {
   defaultType: 'line',
   defaultColor: '#8B5CF6',
-  maxDataPoints: 40
+  maxDataPoints: 40,
+  timeFormat: 'relative',
+  showLegend: true,
+  animation: true,
+  fillOpacity: 0.2,
+  borderWidth: 2,
+  tension: 0.4,
+  pointRadius: 3,
+  pointHoverRadius: 5,
+  yAxisMin: null,
+  yAxisMax: null,
+  showGrid: true,
+  autoScale: true
 };
 
 const ChartsContext = createContext<ChartsContextType | undefined>(undefined);
