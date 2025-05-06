@@ -28,6 +28,9 @@ interface ChartData {
   avg: number | null;
   last: number | null;
   chart: Chart | null;
+  trend?: 'rising' | 'falling' | 'stable' | null;
+  volatility?: 'high' | 'medium' | 'low' | null;
+  insights?: string[];
 }
 
 const DataVisualization: React.FC = () => {
@@ -264,6 +267,20 @@ const DataVisualization: React.FC = () => {
           const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
           const last = values[values.length - 1];
           
+          // Detect patterns and generate insights
+          const trend = detectTrend(truncatedData);
+          const volatility = calculateVolatility(truncatedData);
+          const insights = generateInsights({
+            ...chartData,
+            data: truncatedData,
+            min,
+            max,
+            avg,
+            last,
+            trend,
+            volatility
+          });
+          
           // Update chart instance if it exists
           if (chartData.chart) {
             chartData.chart.data.datasets[0].data = truncatedData;
@@ -276,7 +293,10 @@ const DataVisualization: React.FC = () => {
             min,
             max,
             avg,
-            last
+            last,
+            trend,
+            volatility,
+            insights
           };
         });
       });
@@ -321,6 +341,94 @@ const DataVisualization: React.FC = () => {
   const formatNumber = (num: number | null, decimals = 2): string => {
     if (num === null) return 'N/A';
     return num.toFixed(decimals);
+  };
+  
+  // Detect trends in data series
+  const detectTrend = (data: { x: number; y: number }[]): 'rising' | 'falling' | 'stable' | null => {
+    if (data.length < 5) return null; // Need at least 5 points for meaningful trend
+    
+    // Use the last 10 points for trend detection
+    const recentData = data.slice(-10);
+    
+    // Simple linear regression
+    const xValues = recentData.map(d => d.x);
+    const yValues = recentData.map(d => d.y);
+    
+    const xMean = xValues.reduce((sum, val) => sum + val, 0) / xValues.length;
+    const yMean = yValues.reduce((sum, val) => sum + val, 0) / yValues.length;
+    
+    let numerator = 0;
+    let denominator = 0;
+    
+    for (let i = 0; i < xValues.length; i++) {
+      numerator += (xValues[i] - xMean) * (yValues[i] - yMean);
+      denominator += Math.pow(xValues[i] - xMean, 2);
+    }
+    
+    const slope = denominator !== 0 ? numerator / denominator : 0;
+    
+    // Determine trend direction based on slope
+    const threshold = 0.05;
+    if (Math.abs(slope) < threshold) return 'stable';
+    return slope > 0 ? 'rising' : 'falling';
+  };
+  
+  // Calculate data volatility
+  const calculateVolatility = (data: { x: number; y: number }[]): 'high' | 'medium' | 'low' | null => {
+    if (data.length < 5) return null;
+    
+    const yValues = data.map(d => d.y);
+    
+    // Calculate standard deviation
+    const mean = yValues.reduce((sum, val) => sum + val, 0) / yValues.length;
+    const squaredDiffs = yValues.map(val => Math.pow(val - mean, 2));
+    const avgSquaredDiff = squaredDiffs.reduce((sum, val) => sum + val, 0) / squaredDiffs.length;
+    const stdDev = Math.sqrt(avgSquaredDiff);
+    
+    // Calculate coefficient of variation (CV)
+    const cv = mean !== 0 ? stdDev / Math.abs(mean) : 0;
+    
+    // Determine volatility level
+    if (cv < 0.05) return 'low';
+    if (cv < 0.15) return 'medium';
+    return 'high';
+  };
+  
+  // Generate insights based on data patterns
+  const generateInsights = (chartData: ChartData): string[] => {
+    if (chartData.data.length < 5) return [];
+    
+    const insights: string[] = [];
+    const trend = detectTrend(chartData.data);
+    const volatility = calculateVolatility(chartData.data);
+    
+    // Trend insights
+    if (trend === 'rising') {
+      insights.push(`Upward trend detected in ${chartData.key} values.`);
+    } else if (trend === 'falling') {
+      insights.push(`Downward trend detected in ${chartData.key} values.`);
+    } else if (trend === 'stable') {
+      insights.push(`${chartData.key} values appear stable.`);
+    }
+    
+    // Volatility insights
+    if (volatility === 'high') {
+      insights.push(`High variability observed in the data.`);
+    } else if (volatility === 'low' && chartData.data.length > 10) {
+      insights.push(`The values show consistent, predictable patterns.`);
+    }
+    
+    // Anomaly detection (simple)
+    const yValues = chartData.data.map(d => d.y);
+    const mean = yValues.reduce((sum, val) => sum + val, 0) / yValues.length;
+    const stdDev = Math.sqrt(yValues.map(val => Math.pow(val - mean, 2)).reduce((sum, val) => sum + val, 0) / yValues.length);
+    
+    const lastValue = yValues[yValues.length - 1];
+    if (Math.abs(lastValue - mean) > 2 * stdDev) {
+      insights.push(`Recent value may be an anomaly (outside 2σ range).`);
+    }
+    
+    return insights;
   };
 
   // Animation variants

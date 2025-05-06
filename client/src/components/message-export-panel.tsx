@@ -246,7 +246,7 @@ const MessageExportPanel: React.FC = () => {
                           <Calendar
                             mode="single"
                             selected={exportOptions.startDate || undefined}
-                            onSelect={(date) => setExportOptions(prev => ({ ...prev, startDate: date }))}
+                            onSelect={(date) => setExportOptions(prev => ({ ...prev, startDate: date as Date | null }))}
                             className="bg-gray-800 text-white"
                           />
                         </PopoverContent>
@@ -274,7 +274,7 @@ const MessageExportPanel: React.FC = () => {
                           <Calendar
                             mode="single"
                             selected={exportOptions.endDate || undefined}
-                            onSelect={(date) => setExportOptions(prev => ({ ...prev, endDate: date }))}
+                            onSelect={(date) => setExportOptions(prev => ({ ...prev, endDate: date as Date | null }))}
                             disabled={(date) => 
                               (exportOptions.startDate ? date < exportOptions.startDate : false) || 
                               date > new Date()
