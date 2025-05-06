@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { getMessages, clearMessages, exportMessages, getMessageCount } from '@/lib/indexeddb';
 import { MqttMessage } from '@/hooks/use-mqtt';
 import { useToast } from '@/hooks/use-toast';
+import MessageExportPanel from '@/components/message-export-panel';
 
 const History: React.FC = () => {
   const { toast } = useToast();
@@ -212,18 +213,7 @@ const History: React.FC = () => {
       <div className="flex justify-between items-center">
         <h2 className="font-heading text-xl text-blue-400">Message History</h2>
         <div className="flex space-x-2">
-          <Button
-            className="bg-blue-600 hover:bg-blue-500 text-white"
-            onClick={handleExportCSV}
-          >
-            <i className="fas fa-file-export mr-1"></i> Export CSV
-          </Button>
-          <Button
-            className="bg-blue-600 hover:bg-blue-500 text-white"
-            onClick={handleExportJSON}
-          >
-            <i className="fas fa-file-export mr-1"></i> Export JSON
-          </Button>
+          <MessageExportPanel />
           <Button
             className="bg-red-600 hover:bg-red-500 text-white"
             onClick={handleClearHistory}
