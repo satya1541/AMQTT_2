@@ -831,7 +831,7 @@ const DataVisualization: React.FC = () => {
                     {chartData.forecast && chartData.forecast.length > 0 && (
                       <div className="flex items-center gap-2">
                         <div className="text-sm text-blue-400">
-                          <i className="fas fa-crystal-ball"></i>
+                          <i className="fas fa-magic"></i>
                         </div>
                         <div className="text-gray-300">
                           Forecast: <span className="text-blue-400">Next {chartData.forecast.length} points</span>
