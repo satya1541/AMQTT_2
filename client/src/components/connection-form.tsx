@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const ConnectionForm: React.FC = () => {
   const { toast } = useToast();
@@ -79,7 +80,7 @@ const ConnectionForm: React.FC = () => {
 
   const handleSaveProfile = () => {
     if (!profileName.trim()) {
-      toast({
+      toast.toast({
         title: "Profile Name Required",
         description: "Please enter a name for this profile",
         variant: "warning"
@@ -124,35 +125,115 @@ const ConnectionForm: React.FC = () => {
     setConnectionMode(connectionMode);
   };
 
+  const connectionStatusColors = {
+    connected: "from-green-600 to-green-500",
+    connecting: "from-yellow-600 to-yellow-500",
+    disconnected: "from-red-600 to-red-500"
+  };
+
+  // Helper function for status indicator classes
+  const getStatusIndicatorClass = () => {
+    switch (connectionStatus) {
+      case 'connected': return 'status-indicator status-connected';
+      case 'connecting': return 'status-indicator status-connecting';
+      case 'disconnected': return 'status-indicator status-disconnected';
+      default: return 'status-indicator';
+    }
+  };
+  
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.3
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { 
+      opacity: 1, 
+      y: 0,
+      transition: { duration: 0.5 }
+    }
+  };
+
   return (
-    <div className="bg-gray-800 rounded-lg shadow-xl p-4">
-      <h2 className="font-heading text-xl mb-4 text-blue-400">Connection Settings</h2>
+    <motion.div 
+      className="glass-card neon-border rounded-lg shadow-xl p-6"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <div className="flex justify-between items-center mb-6">
+        <motion.h2 
+          className="font-heading text-xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+        >
+          Connection Settings
+        </motion.h2>
+        
+        <motion.div 
+          className={`px-3 py-1 rounded-full flex items-center text-sm bg-gradient-to-r ${connectionStatusColors[connectionStatus]} bg-opacity-20 shadow-lg`}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.3, duration: 0.5 }}
+        >
+          <div className={getStatusIndicatorClass()}></div>
+          <span className="ml-2 font-medium">
+            {connectionStatus === 'connected' ? 'Connected' : 
+             connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+          </span>
+        </motion.div>
+      </div>
       
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <motion.div 
+        className="space-y-6"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Connection Profiles Dropdown */}
-          <div className="md:col-span-2">
-            <Label htmlFor="profile-select" className="block text-gray-400 text-sm mb-1">Connection Profile</Label>
+          <motion.div 
+            className="md:col-span-2" 
+            variants={itemVariants}
+          >
+            <Label htmlFor="profile-select" className="block text-gray-300 text-sm mb-2 flex items-center">
+              <i className="fas fa-bookmark text-purple-400 mr-2"></i>
+              Connection Profile
+            </Label>
             <div className="flex space-x-2">
               <Select value={selectedProfileId} onValueChange={handleProfileSelect}>
-                <SelectTrigger className="w-full bg-gray-700 border-gray-600 focus:border-purple-500">
+                <SelectTrigger className="w-full bg-gray-800/80 border-gray-700 focus:border-purple-500 shadow-inner">
                   <SelectValue placeholder="Select a profile" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-gray-800 border-gray-700">
                   {connectionsProfiles.map(profile => (
-                    <SelectItem key={profile.id} value={profile.id}>{profile.name}</SelectItem>
+                    <SelectItem key={profile.id} value={profile.id} className="hover:bg-gray-700">
+                      {profile.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              
               <Dialog open={showSaveProfileDialog} onOpenChange={setShowSaveProfileDialog}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="bg-gray-700 hover:bg-gray-600 text-white" title="Save Profile">
-                    <i className="fas fa-save"></i>
+                  <Button variant="outline" className="bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-white" title="Save Profile">
+                    <i className="fas fa-save text-blue-400"></i>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="bg-gray-800 text-white border-gray-700">
                   <DialogHeader>
-                    <DialogTitle>Save Connection Profile</DialogTitle>
+                    <DialogTitle className="text-center text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+                      Save Connection Profile
+                    </DialogTitle>
                   </DialogHeader>
                   <div className="py-4">
                     <Label htmlFor="profile-name" className="text-gray-300">Profile Name</Label>
@@ -166,7 +247,7 @@ const ConnectionForm: React.FC = () => {
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setShowSaveProfileDialog(false)}>Cancel</Button>
-                    <Button onClick={handleSaveProfile}>Save</Button>
+                    <Button onClick={handleSaveProfile} className="gradient-btn">Save</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -175,12 +256,12 @@ const ConnectionForm: React.FC = () => {
                 <AlertDialogTrigger asChild>
                   <Button 
                     variant="outline" 
-                    className="bg-gray-700 hover:bg-gray-600 text-white" 
+                    className="bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-white" 
                     title="Delete Profile"
                     onClick={() => selectedProfileId && setProfileToDelete(selectedProfileId)}
                     disabled={!selectedProfileId}
                   >
-                    <i className="fas fa-trash"></i>
+                    <i className="fas fa-trash text-red-400"></i>
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent className="bg-gray-800 text-white border-gray-700">
@@ -199,166 +280,244 @@ const ConnectionForm: React.FC = () => {
                 </AlertDialogContent>
               </AlertDialog>
             </div>
-          </div>
+          </motion.div>
           
           {/* Broker URL */}
-          <div className="md:col-span-2 floating-label-input">
-            <Input 
-              type="text" 
-              id="broker-url" 
-              placeholder=" " 
-              value={brokerUrl} 
-              onChange={(e) => setBrokerUrl(e.target.value)}
-              className="bg-gray-700 rounded w-full px-3 py-2 border border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-              disabled={connectionStatus !== 'disconnected'}
-            />
-            <Label htmlFor="broker-url" className="text-gray-400">Broker URL (wss:// or ws://)</Label>
-          </div>
+          <motion.div className="md:col-span-2 floating-label-input" variants={itemVariants}>
+            <div className="relative">
+              <Input 
+                type="text" 
+                id="broker-url" 
+                placeholder=" " 
+                value={brokerUrl} 
+                onChange={(e) => setBrokerUrl(e.target.value)}
+                className="bg-gray-800/80 rounded-md w-full px-10 py-3 border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none shadow-inner"
+                disabled={connectionStatus !== 'disconnected'}
+              />
+              <Label htmlFor="broker-url" className="text-gray-400">Broker URL (wss:// or ws://)</Label>
+              <div className="absolute left-3 top-3 text-purple-400">
+                <i className="fas fa-server"></i>
+              </div>
+            </div>
+          </motion.div>
           
           {/* Username / Password */}
-          <div className="floating-label-input">
-            <Input 
-              type="text" 
-              id="username" 
-              placeholder=" " 
-              value={username} 
-              onChange={(e) => setUsername(e.target.value)}
-              className="bg-gray-700 rounded w-full px-3 py-2 border border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-              disabled={connectionStatus !== 'disconnected'}
-            />
-            <Label htmlFor="username" className="text-gray-400">Username (optional)</Label>
-          </div>
+          <motion.div className="floating-label-input" variants={itemVariants}>
+            <div className="relative">
+              <Input 
+                type="text" 
+                id="username" 
+                placeholder=" " 
+                value={username} 
+                onChange={(e) => setUsername(e.target.value)}
+                className="bg-gray-800/80 rounded-md w-full px-10 py-3 border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none shadow-inner"
+                disabled={connectionStatus !== 'disconnected'}
+              />
+              <Label htmlFor="username" className="text-gray-400">Username (optional)</Label>
+              <div className="absolute left-3 top-3 text-blue-400">
+                <i className="fas fa-user"></i>
+              </div>
+            </div>
+          </motion.div>
           
-          <div className="floating-label-input">
-            <Input 
-              type="password" 
-              id="password" 
-              placeholder=" " 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)}
-              className="bg-gray-700 rounded w-full px-3 py-2 border border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-              disabled={connectionStatus !== 'disconnected'}
-            />
-            <Label htmlFor="password" className="text-gray-400">Password (optional)</Label>
-          </div>
+          <motion.div className="floating-label-input" variants={itemVariants}>
+            <div className="relative">
+              <Input 
+                type="password" 
+                id="password" 
+                placeholder=" " 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-gray-800/80 rounded-md w-full px-10 py-3 border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none shadow-inner"
+                disabled={connectionStatus !== 'disconnected'}
+              />
+              <Label htmlFor="password" className="text-gray-400">Password (optional)</Label>
+              <div className="absolute left-3 top-3 text-teal-400">
+                <i className="fas fa-key"></i>
+              </div>
+            </div>
+          </motion.div>
           
           {/* Base Topic */}
-          <div className="md:col-span-2 floating-label-input">
-            <Input 
-              type="text" 
-              id="base-topic" 
-              placeholder=" " 
-              value={baseTopic} 
-              onChange={(e) => setBaseTopic(e.target.value)}
-              className="bg-gray-700 rounded w-full px-3 py-2 border border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-              disabled={connectionStatus !== 'disconnected'}
-            />
-            <Label htmlFor="base-topic" className="text-gray-400">Base Topic</Label>
-          </div>
+          <motion.div className="md:col-span-2 floating-label-input" variants={itemVariants}>
+            <div className="relative">
+              <Input 
+                type="text" 
+                id="base-topic" 
+                placeholder=" " 
+                value={baseTopic} 
+                onChange={(e) => setBaseTopic(e.target.value)}
+                className="bg-gray-800/80 rounded-md w-full px-10 py-3 border border-gray-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none shadow-inner"
+                disabled={connectionStatus !== 'disconnected'}
+              />
+              <Label htmlFor="base-topic" className="text-gray-400">Base Topic</Label>
+              <div className="absolute left-3 top-3 text-green-400">
+                <i className="fas fa-hashtag"></i>
+              </div>
+            </div>
+          </motion.div>
           
           {/* QoS and Retain Flag */}
-          <div>
-            <Label htmlFor="qos-select" className="block text-gray-400 text-sm mb-1">Quality of Service (QoS)</Label>
+          <motion.div variants={itemVariants}>
+            <Label htmlFor="qos-select" className="block text-gray-300 text-sm mb-2 flex items-center">
+              <i className="fas fa-shield-alt text-yellow-400 mr-2"></i>
+              Quality of Service (QoS)
+            </Label>
             <Select value={qos.toString()} onValueChange={(value) => setQos(parseInt(value) as 0 | 1 | 2)}>
-              <SelectTrigger id="qos-select" className="w-full bg-gray-700 border-gray-600 focus:border-purple-500">
+              <SelectTrigger id="qos-select" className="w-full bg-gray-800/80 border-gray-700 focus:border-purple-500 shadow-inner">
                 <SelectValue placeholder="Select QoS" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">0 - At most once</SelectItem>
-                <SelectItem value="1">1 - At least once</SelectItem>
-                <SelectItem value="2">2 - Exactly once</SelectItem>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectItem value="0" className="hover:bg-gray-700">0 - At most once</SelectItem>
+                <SelectItem value="1" className="hover:bg-gray-700">1 - At least once</SelectItem>
+                <SelectItem value="2" className="hover:bg-gray-700">2 - Exactly once</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </motion.div>
           
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
+          <motion.div className="flex items-center space-x-4" variants={itemVariants}>
+            <div className="flex items-center space-x-2 bg-gray-800/60 p-2 rounded-lg border border-gray-700/50">
               <Switch 
                 id="retain-switch" 
                 checked={retain}
                 onCheckedChange={setRetain}
+                className="data-[state=checked]:bg-purple-600"
               />
-              <Label htmlFor="retain-switch" className="text-gray-400">Retain Messages</Label>
+              <Label htmlFor="retain-switch" className="text-gray-300 flex items-center">
+                <i className="fas fa-thumbtack text-purple-400 mr-2"></i>
+                Retain
+              </Label>
             </div>
             
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 bg-gray-800/60 p-2 rounded-lg border border-gray-700/50">
               <Switch 
                 id="sys-topics-switch" 
                 checked={enableSysTopics}
                 onCheckedChange={setEnableSysTopics}
                 disabled={connectionStatus !== 'disconnected'}
+                className="data-[state=checked]:bg-teal-600"
               />
-              <Label htmlFor="sys-topics-switch" className="text-gray-400">$SYS Topics</Label>
+              <Label htmlFor="sys-topics-switch" className="text-gray-300 flex items-center">
+                <i className="fas fa-cogs text-teal-400 mr-2"></i>
+                $SYS
+              </Label>
             </div>
-          </div>
+          </motion.div>
           
           {/* Connection Mode */}
-          <div className="md:col-span-2">
-            <Label className="block text-gray-400 text-sm mb-1">Connection Mode</Label>
+          <motion.div className="md:col-span-2" variants={itemVariants}>
+            <Label className="block text-gray-300 text-sm mb-2 flex items-center">
+              <i className="fas fa-sliders-h text-blue-400 mr-2"></i>
+              Connection Mode
+            </Label>
             <div className="grid grid-cols-3 gap-2">
               <Button 
                 type="button" 
-                variant={connectionMode === 'connect-only' ? 'default' : 'outline'}
-                className={connectionMode === 'connect-only' ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'}
+                variant="outline"
+                className={`transition-all duration-300 ease-in-out ${
+                  connectionMode === 'connect-only' 
+                    ? 'bg-gradient-to-r from-blue-600/70 to-blue-700/70 border-blue-500 text-white shadow-lg shadow-blue-900/30' 
+                    : 'bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-gray-300'
+                }`}
                 onClick={() => handleConnectionModeSelect('connect-only')}
                 disabled={connectionStatus !== 'disconnected'}
               >
-                <i className="fas fa-plug mr-1"></i> Connect Only
+                <i className={`fas fa-plug mr-2 ${connectionMode === 'connect-only' ? 'text-white' : 'text-blue-400'}`}></i> 
+                Connect Only
               </Button>
               <Button 
                 type="button" 
-                variant={connectionMode === 'connect-auto' ? 'default' : 'outline'}
-                className={connectionMode === 'connect-auto' ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'}
+                variant="outline"
+                className={`transition-all duration-300 ease-in-out ${
+                  connectionMode === 'connect-auto' 
+                    ? 'bg-gradient-to-r from-purple-600/70 to-purple-700/70 border-purple-500 text-white shadow-lg shadow-purple-900/30' 
+                    : 'bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-gray-300'
+                }`}
                 onClick={() => handleConnectionModeSelect('connect-auto')}
                 disabled={connectionStatus !== 'disconnected'}
               >
-                <i className="fas fa-random mr-1"></i> Connect & Auto
+                <i className={`fas fa-random mr-2 ${connectionMode === 'connect-auto' ? 'text-white' : 'text-purple-400'}`}></i> 
+                Connect & Auto
               </Button>
               <Button 
                 type="button" 
-                variant={connectionMode === 'connect-manual' ? 'default' : 'outline'}
-                className={connectionMode === 'connect-manual' ? 'bg-blue-700 hover:bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'}
+                variant="outline"
+                className={`transition-all duration-300 ease-in-out ${
+                  connectionMode === 'connect-manual' 
+                    ? 'bg-gradient-to-r from-teal-600/70 to-teal-700/70 border-teal-500 text-white shadow-lg shadow-teal-900/30' 
+                    : 'bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-gray-300'
+                }`}
                 onClick={() => handleConnectionModeSelect('connect-manual')}
                 disabled={connectionStatus !== 'disconnected'}
               >
-                <i className="fas fa-clock mr-1"></i> Connect & Manual
+                <i className={`fas fa-clock mr-2 ${connectionMode === 'connect-manual' ? 'text-white' : 'text-teal-400'}`}></i> 
+                Connect & Manual
               </Button>
             </div>
-          </div>
+          </motion.div>
         </div>
         
         {/* Connection Buttons */}
-        <div className="flex space-x-3 pt-2">
-          <Button
-            id="connect-btn"
-            type="button" 
-            className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white"
-            onClick={handleConnect}
-            disabled={connectionStatus !== 'disconnected' || !brokerUrl || !baseTopic}
-          >
-            <i className="fas fa-plug mr-2"></i> Connect
-          </Button>
-          <Button
-            id="disconnect-btn"
-            type="button" 
-            className="flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white"
-            onClick={disconnect}
-            disabled={connectionStatus === 'disconnected'}
-          >
-            <i className="fas fa-power-off mr-2"></i> Disconnect
-          </Button>
+        <motion.div 
+          className="flex space-x-3 pt-3"
+          variants={itemVariants}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8, duration: 0.5 }}
+        >
+          <AnimatePresence mode="wait">
+            {connectionStatus === 'disconnected' ? (
+              <motion.div 
+                key="connect"
+                className="flex-1"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Button
+                  id="connect-btn"
+                  type="button" 
+                  className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white shadow-lg shadow-green-900/30 border border-green-500/50"
+                  onClick={handleConnect}
+                  disabled={!brokerUrl || !baseTopic}
+                >
+                  <i className="fas fa-plug mr-2"></i> Connect
+                </Button>
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="disconnect"
+                className="flex-1"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Button
+                  id="disconnect-btn"
+                  type="button" 
+                  className="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white shadow-lg shadow-red-900/30 border border-red-500/50"
+                  onClick={disconnect}
+                >
+                  <i className="fas fa-power-off mr-2"></i> Disconnect
+                </Button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
           <Button 
             type="reset" 
             variant="outline" 
-            className="bg-gray-700 hover:bg-gray-600 text-white"
+            className="bg-gray-800/80 hover:bg-gray-700 border-gray-700 text-white"
             onClick={handleFormReset}
             disabled={connectionStatus !== 'disconnected'}
           >
             <i className="fas fa-redo"></i>
           </Button>
-        </div>
-      </div>
-    </div>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 };
 
