@@ -17,7 +17,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCharts } from '@/hooks/use-charts';
 import { motion } from 'framer-motion';
 
-const ChartSettingsPanel: React.FC = () => {
+interface ChartSettingsPanelProps {
+  onClose: () => void;
+}
+
+const ChartSettingsPanel: React.FC<ChartSettingsPanelProps> = ({ onClose }) => {
   const { settings, updateSettings } = useCharts();
   
   const handleNumberChange = (key: keyof typeof settings) => (e: React.ChangeEvent<HTMLInputElement>) => {

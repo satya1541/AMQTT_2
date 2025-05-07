@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { useMqtt, MqttMessage } from '@/hooks/use-mqtt';
 import { useCharts } from '@/hooks/use-charts';
 import { useMobile } from '@/hooks/use-mobile';
 import { motion, AnimatePresence } from 'framer-motion';
-import Chart from 'chart.js/auto';
 import ChartSettingsPanel from './chart-settings-panel';
 import ChartExportPanel from './chart-export-panel';
+import SimplifiedChart from './simplified-chart';
 
 interface DataKey {
   path: string;
@@ -28,12 +27,9 @@ interface ChartData {
   max: number | null;
   avg: number | null;
   last: number | null;
-  chart: Chart | null;
   trend?: 'rising' | 'falling' | 'stable' | null;
   volatility?: 'high' | 'medium' | 'low' | null;
   insights?: string[];
-  forecast?: { x: number; y: number }[];
-  anomalyThreshold?: number;
 }
 
 const DataVisualization: React.FC = () => {
@@ -47,8 +43,6 @@ const DataVisualization: React.FC = () => {
   const [chartColor, setChartColor] = useState<string>(chartSettings.defaultColor);
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showExport, setShowExport] = useState<boolean>(false);
-  
-  const chartRefs = useRef<Map<string, HTMLCanvasElement | null>>(new Map());
 
   // Extract numeric data keys from incoming messages
   useEffect(() => {
@@ -114,8 +108,7 @@ const DataVisualization: React.FC = () => {
             min: null,
             max: null,
             avg: null,
-            last: null,
-            chart: null
+            last: null
           });
         }
       });
@@ -123,91 +116,6 @@ const DataVisualization: React.FC = () => {
       return updatedCharts;
     });
   }, [dataKeys, chartType, chartColor]);
-
-  // Handle rendering charts
-  useEffect(() => {
-    // Create charts only when we have data to show
-    charts.forEach(chartData => {
-      const canvasElement = chartRefs.current.get(chartData.id);
-      if (!canvasElement) return;
-
-      // Clear existing chart
-      if (chartData.chart) {
-        chartData.chart.destroy();
-      }
-
-      const ctx = canvasElement.getContext('2d');
-      if (!ctx) return;
-
-      // Create new chart
-      const newChart = new Chart(ctx, {
-        type: chartData.type as any,
-        data: {
-          datasets: [{
-            label: chartData.key,
-            data: chartData.data,
-            borderColor: chartData.color,
-            backgroundColor: `${chartData.color}${Math.round(chartSettings.fillOpacity * 255).toString(16).padStart(2, '0')}`,
-            tension: chartSettings.tension,
-            borderWidth: chartSettings.borderWidth,
-            pointRadius: chartSettings.pointRadius,
-            pointHoverRadius: chartSettings.pointHoverRadius,
-            fill: true
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              display: chartSettings.showLegend
-            }
-          },
-          scales: chartData.type === 'line' || chartData.type === 'bar' ? {
-            x: {
-              type: 'linear',
-              position: 'bottom',
-              min: 0,
-              max: chartSettings.maxDataPoints - 1,
-              ticks: {
-                display: false
-              },
-              grid: {
-                display: chartSettings.showGrid
-              }
-            },
-            y: {
-              beginAtZero: true,
-              min: chartSettings.autoScale ? undefined : chartSettings.yAxisMin,
-              max: chartSettings.autoScale ? undefined : chartSettings.yAxisMax,
-              grid: {
-                display: chartSettings.showGrid
-              }
-            }
-          } : undefined,
-          animation: chartSettings.animation ? {} : false
-        }
-      });
-
-      // Update chart reference in state
-      setCharts(prevCharts => 
-        prevCharts.map(c => 
-          c.id === chartData.id 
-            ? { ...c, chart: newChart } 
-            : c
-        )
-      );
-    });
-
-    // Cleanup on unmount or when charts change
-    return () => {
-      charts.forEach(chart => {
-        if (chart.chart) {
-          chart.chart.destroy();
-        }
-      });
-    };
-  }, [charts, chartSettings]);
 
   // Handle toggling data keys
   const handleKeyToggle = (path: string, checked: boolean) => {
@@ -278,14 +186,9 @@ const DataVisualization: React.FC = () => {
           const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
           const last = values[values.length - 1];
           
-          // Detect patterns and generate insights
+          // Detect trends
           const trend = detectTrend(truncatedData);
           const volatility = calculateVolatility(truncatedData);
-          const anomalyThreshold = calculateAnomalyThreshold(truncatedData);
-          const forecast = trend && trend !== 'stable' && truncatedData.length > 10 
-            ? generateForecast(truncatedData) 
-            : [];
-            
           const insights = generateInsights({
             ...chartData,
             data: truncatedData,
@@ -294,38 +197,8 @@ const DataVisualization: React.FC = () => {
             avg,
             last,
             trend,
-            volatility,
-            forecast,
-            anomalyThreshold
+            volatility
           });
-          
-          // Update chart instance if it exists
-          if (chartData.chart) {
-            // Clear existing datasets first
-            if (chartData.chart.data.datasets.length > 1) {
-              chartData.chart.data.datasets.splice(1);
-            }
-            
-            // Update main dataset data
-            chartData.chart.data.datasets[0].data = truncatedData;
-            
-            // Add forecast dataset if available
-            if (forecast.length > 0 && (chartData.type === 'line' || chartData.type === 'bar')) {
-              chartData.chart.data.datasets.push({
-                label: `${chartData.key} (Forecast)`,
-                data: forecast,
-                borderColor: '#ffffff80',
-                borderDash: [5, 5],
-                backgroundColor: 'transparent',
-                borderWidth: 2,
-                pointRadius: 2,
-                tension: 0.3,
-                fill: false
-              });
-            }
-            
-            chartData.chart.update('none');
-          }
           
           return {
             ...chartData,
@@ -336,9 +209,7 @@ const DataVisualization: React.FC = () => {
             last,
             trend,
             volatility,
-            insights,
-            forecast,
-            anomalyThreshold
+            insights
           };
         });
       });
@@ -379,12 +250,6 @@ const DataVisualization: React.FC = () => {
     }
     
     return current;
-  };
-
-  // Format number for display
-  const formatNumber = (num: number | null, decimals = 2): string => {
-    if (num === null) return 'N/A';
-    return num.toFixed(decimals);
   };
   
   // Detect trends in data series
@@ -436,56 +301,6 @@ const DataVisualization: React.FC = () => {
     if (cv < 0.05) return 'low';
     if (cv < 0.15) return 'medium';
     return 'high';
-  };
-  
-  // Generate predictive forecast based on recent data trend
-  const generateForecast = (data: { x: number; y: number }[], steps: number = 5): { x: number; y: number }[] => {
-    if (data.length < 10) return []; // Need sufficient data for forecasting
-    
-    // Use recent data for forecasting
-    const recentData = data.slice(-15);
-    
-    // Simple linear regression for forecast
-    const xValues = recentData.map(d => d.x);
-    const yValues = recentData.map(d => d.y);
-    
-    const xMean = xValues.reduce((sum, val) => sum + val, 0) / xValues.length;
-    const yMean = yValues.reduce((sum, val) => sum + val, 0) / yValues.length;
-    
-    let numerator = 0;
-    let denominator = 0;
-    
-    for (let i = 0; i < xValues.length; i++) {
-      numerator += (xValues[i] - xMean) * (yValues[i] - yMean);
-      denominator += Math.pow(xValues[i] - xMean, 2);
-    }
-    
-    const slope = denominator !== 0 ? numerator / denominator : 0;
-    const intercept = yMean - (slope * xMean);
-    
-    // Generate forecast points
-    const forecast: { x: number; y: number }[] = [];
-    const lastX = data[data.length - 1].x;
-    
-    for (let i = 1; i <= steps; i++) {
-      const x = lastX + i;
-      const y = (slope * x) + intercept;
-      forecast.push({ x, y });
-    }
-    
-    return forecast;
-  };
-  
-  // Calculate anomaly detection threshold based on data volatility
-  const calculateAnomalyThreshold = (data: { x: number; y: number }[]): number => {
-    if (data.length < 5) return 2.0; // Default 2 standard deviations
-    
-    const volatility = calculateVolatility(data);
-    
-    // Adjust threshold based on volatility
-    if (volatility === 'high') return 3.0; // More permissive for high volatility data
-    if (volatility === 'low') return 1.5;  // More strict for low volatility data
-    return 2.0; // Default for medium volatility
   };
   
   // Generate insights based on data patterns
@@ -552,11 +367,6 @@ const DataVisualization: React.FC = () => {
       case 'stable': return <span className="text-blue-500">→</span>;
       default: return null;
     }
-  };
-
-  // Add canvas ref to the refs map
-  const setCanvasRef = (id: string, canvas: HTMLCanvasElement | null) => {
-    chartRefs.current.set(id, canvas);
   };
 
   // Render no charts message if no data keys found
@@ -711,65 +521,31 @@ const DataVisualization: React.FC = () => {
       {/* Charts grid */}
       <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'} gap-6`}>
         {charts.map((chartData) => (
-          <Card key={chartData.id} className="overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center justify-between">
-                <div className="flex items-center">
-                  <span 
-                    className="w-3 h-3 rounded-full mr-2" 
-                    style={{ backgroundColor: chartData.color }}
-                  ></span>
-                  {chartData.key}
-                  {chartData.trend && (
-                    <span className="ml-2">{getTrendIcon(chartData.trend)}</span>
-                  )}
-                </div>
-                <span className="text-sm font-normal">
-                  {chartData.last !== null ? formatNumber(chartData.last) : 'N/A'}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0 pb-1">
-              <div className="h-[240px] px-4 pt-2">
-                <canvas 
-                  ref={(canvas) => setCanvasRef(chartData.id, canvas)} 
-                  height="240"
-                ></canvas>
+          <div key={chartData.id}>
+            <SimplifiedChart 
+              id={chartData.id}
+              title={chartData.key}
+              data={chartData.data}
+              type={chartData.type}
+              color={chartData.color}
+              min={chartData.min}
+              max={chartData.max}
+              avg={chartData.avg}
+              last={chartData.last}
+            />
+            
+            {/* Insights section */}
+            {chartData.insights && chartData.insights.length > 0 && (
+              <div className="px-4 py-2 bg-accent/20 text-xs border mt-1 rounded-md">
+                <div className="font-medium mb-1">Insights:</div>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {chartData.insights.map((insight, idx) => (
+                    <li key={idx}>{insight}</li>
+                  ))}
+                </ul>
               </div>
-              
-              {/* Stats and insights */}
-              <div className="px-4 py-2 flex flex-wrap text-xs text-muted-foreground gap-x-4 gap-y-1 border-t mt-2">
-                <div>Min: {formatNumber(chartData.min)}</div>
-                <div>Max: {formatNumber(chartData.max)}</div>
-                <div>Avg: {formatNumber(chartData.avg)}</div>
-                
-                {chartData.volatility && (
-                  <div>
-                    Volatility: 
-                    <span className={`ml-1 ${
-                      chartData.volatility === 'high' ? 'text-red-400' :
-                      chartData.volatility === 'low' ? 'text-green-400' :
-                      'text-yellow-400'
-                    }`}>
-                      {chartData.volatility}
-                    </span>
-                  </div>
-                )}
-              </div>
-              
-              {/* Insights section */}
-              {chartData.insights && chartData.insights.length > 0 && (
-                <div className="px-4 py-2 bg-accent/20 text-xs border-t">
-                  <div className="font-medium mb-1">Insights:</div>
-                  <ul className="list-disc list-inside space-y-0.5">
-                    {chartData.insights.map((insight, idx) => (
-                      <li key={idx}>{insight}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            )}
+          </div>
         ))}
         
         {/* No charts selected state */}
