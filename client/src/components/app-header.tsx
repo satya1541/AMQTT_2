@@ -3,7 +3,6 @@ import { Link } from 'wouter';
 import { useTheme } from '@/hooks/use-theme';
 import { useMqtt } from '@/hooks/use-mqtt';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { motion } from 'framer-motion';
 
 interface AppHeaderProps {
@@ -149,55 +148,49 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
         </motion.div>
       </div>
       
-      {/* Navigation Tabs */}
+      {/* Navigation */}
       <motion.nav 
         className="container mx-auto px-4 flex overflow-x-auto"
         variants={itemVariants}
       >
-        <Tabs defaultValue={currentPath === '/' ? '/' : currentPath} className="w-full">
-          <TabsList className="w-full justify-start h-auto bg-transparent">
-            {[
-              { path: '/', icon: 'network-wired', label: 'Connection' },
-              { path: '/live-feed', icon: 'stream', label: 'Live Feed' },
-              { path: '/visualize', icon: 'chart-line', label: 'Visualize' },
-              { path: '/rules', icon: 'brain', label: 'AI & Rules' },
-              { path: '/history', icon: 'history', label: 'History' },
-              { path: '/settings', icon: 'cog', label: 'Settings' }
-            ].map((item, index) => (
-              <motion.div
-                key={item.path}
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 + index * 0.05, duration: 0.4 }}
+        <div className="flex space-x-2 w-full border-b border-purple-900/30">
+          {[
+            { path: '/', icon: 'network-wired', label: 'Connection' },
+            { path: '/live-feed', icon: 'stream', label: 'Live Feed' },
+            { path: '/visualize', icon: 'chart-line', label: 'Visualize' },
+            { path: '/rules', icon: 'brain', label: 'AI & Rules' },
+            { path: '/history', icon: 'history', label: 'History' },
+            { path: '/settings', icon: 'cog', label: 'Settings' }
+          ].map((item, index) => (
+            <motion.div
+              key={item.path}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 + index * 0.05, duration: 0.4 }}
+              className="relative"
+            >
+              <Link 
+                href={item.path} 
+                className={`flex items-center px-4 py-3 relative group transition-all duration-300 ease-in-out ${
+                  currentPath === item.path 
+                    ? 'bg-gray-800/50 text-purple-400 border-b-2 border-purple-500' 
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
               >
-                <TabsTrigger 
-                  value={item.path} 
-                  asChild 
-                  className="data-[state=active]:bg-gray-800/50 data-[state=active]:text-purple-400 data-[state=active]:border-b-2 data-[state=active]:border-purple-500 py-3 rounded-none transition-all duration-300 ease-in-out"
+                <motion.span
+                  whileHover={{ 
+                    scale: 1.2,
+                    transition: { duration: 0.2 } 
+                  }}
+                  className="inline-block"
                 >
-                  <Link href={item.path} className="flex items-center px-4 relative group">
-                    <motion.span 
-                      className="absolute bottom-0 left-0 h-0.5 bg-purple-500 w-0 rounded-full"
-                      initial={false}
-                      animate={{ width: currentPath === item.path ? '100%' : '0%' }}
-                      transition={{ duration: 0.3 }}
-                    />
-                    <motion.span
-                      whileHover={{ 
-                        scale: 1.2,
-                        transition: { duration: 0.2 } 
-                      }}
-                      className="inline-block"
-                    >
-                      <i className={`fas fa-${item.icon} mr-2 ${currentPath === item.path ? 'text-purple-400' : 'text-gray-400 group-hover:text-gray-300'}`}></i>
-                    </motion.span>
-                    <span className="group-hover:text-gray-200 transition-colors duration-300">{item.label}</span>
-                  </Link>
-                </TabsTrigger>
-              </motion.div>
-            ))}
-          </TabsList>
-        </Tabs>
+                  <i className={`fas fa-${item.icon} mr-2 ${currentPath === item.path ? 'text-purple-400' : 'text-gray-400 group-hover:text-gray-300'}`}></i>
+                </motion.span>
+                <span>{item.label}</span>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
       </motion.nav>
     </motion.header>
   );
