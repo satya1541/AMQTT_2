@@ -63,40 +63,66 @@ export function checkForAppUpdate(callback: () => void) {
   });
 }
 
+// Store the deferred prompt globally so it survives across renders
+let deferredInstallPrompt: any = null;
+
+// Capture any install prompt events that occur
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent the browser's default install prompt
+  e.preventDefault();
+  // Save the event for later use
+  deferredInstallPrompt = e;
+  console.log('Install prompt captured and saved');
+});
+
+// Function to check if install is available
+export function isInstallAvailable(): boolean {
+  return !!deferredInstallPrompt;
+}
+
 // Function to install PWA
 export function promptInstall(callback: (outcome: boolean) => void) {
-  let deferredPrompt: any = null;
-
-  // Capture install prompt
-  window.addEventListener('beforeinstallprompt', (e) => {
-    // Prevent the browser's default install prompt
-    e.preventDefault();
-    // Save the event for later use
-    deferredPrompt = e;
-  });
-
   // Function to trigger install prompt
   return () => {
-    if (!deferredPrompt) {
+    if (!deferredInstallPrompt) {
+      console.log('No install prompt available');
+      
+      // If we're already in standalone mode, inform the user
+      if (isRunningAsPwa()) {
+        console.log('Already running as PWA');
+        callback(true);
+        return;
+      }
+      
+      // If no prompt available and not a PWA, must use manual install
       callback(false);
       return;
     }
 
+    console.log('Showing install prompt');
+    
     // Show the prompt
-    deferredPrompt.prompt();
+    deferredInstallPrompt.prompt();
 
     // Wait for the user to respond to the prompt
-    deferredPrompt.userChoice.then((choiceResult: { outcome: string }) => {
-      if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-        callback(true);
-      } else {
-        console.log('User dismissed the install prompt');
+    deferredInstallPrompt.userChoice
+      .then((choiceResult: { outcome: string }) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+          callback(true);
+        } else {
+          console.log('User dismissed the install prompt');
+          callback(false);
+        }
+      })
+      .catch((error: Error) => {
+        console.error('Install prompt error:', error);
         callback(false);
-      }
-      // Clear the saved prompt, it can only be used once
-      deferredPrompt = null;
-    });
+      })
+      .finally(() => {
+        // Clear the saved prompt, it can only be used once
+        deferredInstallPrompt = null;
+      });
   };
 }
 
