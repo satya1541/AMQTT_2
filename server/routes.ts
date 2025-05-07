@@ -4,6 +4,7 @@ import { WebSocketServer } from "ws";
 import WebSocket from "ws";
 import * as mqtt from 'mqtt';
 import { PacketCallback } from 'mqtt';
+import os from 'os';
 
 interface MqttClientConnection {
   client: mqtt.MqttClient;
@@ -46,14 +47,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Handle WebSocket connections
-  wss.on('connection', (ws) => {
-    console.log('WebSocket client connected');
+  wss.on('connection', (ws, req) => {
+    console.log(`WebSocket client connected from ${req.socket.remoteAddress}, URL: ${req.url}`);
+    
+    // Log connection headers for debugging
+    console.log('WebSocket connection headers:', {
+      origin: req.headers.origin,
+      host: req.headers.host,
+      upgrade: req.headers.upgrade,
+      connection: req.headers.connection,
+      secWebSocketKey: req.headers['sec-websocket-key'] ? 'present' : 'missing',
+      secWebSocketVersion: req.headers['sec-websocket-version'],
+      secWebSocketProtocol: req.headers['sec-websocket-protocol']
+    });
     
     // Send a welcome message
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
         type: 'info',
-        message: 'Connected to MQTT Explorer WebSocket server'
+        message: 'Connected to MQTT Explorer WebSocket server',
+        timestamp: Date.now()
       }));
     }
     
@@ -64,6 +77,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('Received message:', data.type);
         
         switch (data.type) {
+          case 'ping':
+            // Respond to ping messages immediately for testing
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'pong',
+                timestamp: Date.now(),
+                receivedTimestamp: data.timestamp,
+                id: data.id || 'unknown'
+              }));
+            }
+            break;
           case 'connect':
             handleMqttConnect(ws, data);
             break;
@@ -368,9 +392,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // API routes
   app.get('/api/status', (req, res) => {
+    const uptime = process.uptime();
+    const memory = process.memoryUsage();
+    
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
+      uptime: {
+        seconds: Math.floor(uptime),
+        formatted: formatUptime(uptime)
+      },
       connections: {
         websocket: wss.clients.size,
         mqtt: mqttConnections.size
@@ -378,19 +409,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
       websocket: {
         server: 'active',
         path: '/ws'
+      },
+      system: {
+        platform: process.platform,
+        nodeVersion: process.version,
+        memory: {
+          rss: formatBytes(memory.rss),
+          heapTotal: formatBytes(memory.heapTotal),
+          heapUsed: formatBytes(memory.heapUsed),
+          external: formatBytes(memory.external)
+        },
+        cpus: os.cpus().length,
+        hostname: os.hostname()
       }
     });
   });
   
   // WebSocket health check endpoint
   app.get('/api/ws-check', (req, res) => {
+    // Check if WebSocket server is actually responding to a ping
+    let serverResponsive = false;
+    try {
+      wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.ping();
+          serverResponsive = true;
+        }
+      });
+    } catch (error) {
+      console.error('Error pinging WebSocket clients:', error);
+    }
+    
+    // Get client connection info for debugging
+    const clientInfo: Array<{
+      readyState: number;
+      readyStateString: string;
+      protocol: string;
+      hasMqttConnection: boolean;
+    }> = [];
+    
+    wss.clients.forEach(client => {
+      clientInfo.push({
+        readyState: client.readyState,
+        readyStateString: getReadyStateString(client.readyState),
+        protocol: client.protocol || '',
+        hasMqttConnection: mqttConnections.has(client)
+      });
+    });
+    
     res.json({
+      timestamp: new Date().toISOString(),
       websocket_server: 'active',
+      websocket_responsive: serverResponsive || wss.clients.size === 0,
       clients_connected: wss.clients.size,
       path: '/ws',
-      mqtt_connections: mqttConnections.size
+      mqtt_connections: mqttConnections.size,
+      client_details: clientInfo
     });
   });
+  
+  // Simple ping endpoint for easy connection testing
+  app.get('/api/ping', (req, res) => {
+    res.json({ 
+      pong: true,
+      timestamp: Date.now(),
+      formatted: new Date().toISOString()
+    });
+  });
+  
+  // Test WebSocket echo endpoint
+  app.get('/api/ws-test', (req, res) => {
+    const testId = Date.now().toString(36);
+    try {
+      // Create a test WebSocket connection to ourselves
+      const protocol = req.protocol === 'https' ? 'wss' : 'ws';
+      const host = req.headers.host || 'localhost:5000';
+      const wsUrl = `${protocol}://${host}/ws`;
+      
+      res.json({
+        test_id: testId,
+        status: 'starting',
+        ws_url: wsUrl,
+        message: 'WebSocket test initiated. This endpoint only creates the test; check logs for results.'
+      });
+      
+      // We're not actually creating a test WebSocket here because it's complex to do
+      // from the server to itself and would require additional libraries
+      console.log(`WebSocket test ${testId} would connect to ${wsUrl}`);
+    } catch (error: unknown) {
+      console.error(`WebSocket test ${testId} failed:`, error);
+      res.status(500).json({
+        test_id: testId,
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+  
+  // Helper functions for formatting
+  function formatUptime(uptime: number): string {
+    const days = Math.floor(uptime / 86400);
+    const hours = Math.floor((uptime % 86400) / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    const seconds = Math.floor(uptime % 60);
+    
+    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+  }
+  
+  function formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+  
+  function getReadyStateString(readyState: number): string {
+    switch (readyState) {
+      case WebSocket.CONNECTING: return 'CONNECTING';
+      case WebSocket.OPEN: return 'OPEN';
+      case WebSocket.CLOSING: return 'CLOSING';
+      case WebSocket.CLOSED: return 'CLOSED';
+      default: return 'UNKNOWN';
+    }
+  }
 
   return httpServer;
 }

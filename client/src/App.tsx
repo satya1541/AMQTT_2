@@ -8,6 +8,8 @@ import Visualize from "@/pages/visualize";
 import Rules from "@/pages/rules";
 import History from "@/pages/history";
 import Settings from "@/pages/settings";
+import Diagnostic from "@/pages/diagnostic";
+import TestPage from "@/pages/test";
 import AppHeader from "@/components/app-header";
 import { useEffect, useState } from "react";
 import { MQTTProvider } from "@/hooks/use-mqtt";
@@ -51,6 +53,8 @@ function Router() {
           <Route path="/rules" component={Rules} />
           <Route path="/history" component={History} />
           <Route path="/settings" component={Settings} />
+          <Route path="/diagnostic" component={Diagnostic} />
+          <Route path="/test" component={TestPage} />
           {/* Fallback to 404 */}
           <Route component={NotFound} />
         </Switch>
