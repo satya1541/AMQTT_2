@@ -379,10 +379,7 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
 
-      // Track connection attempt
-      console.log(`Attempting to connect to WebSocket server and MQTT broker at ${options.brokerUrl}`);
-      
-      // Handle WebSocket connection/MQTT broker connection promise
+      // Connect to MQTT broker via WebSocket
       mqttClient.connect({
         brokerUrl: options.brokerUrl,
         clientId: clientId,
@@ -390,35 +387,12 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password: options.password,
         clean: options.clean !== undefined ? options.clean : true,
         reconnectPeriod: 5000 // Auto reconnect after 5 seconds
-      })
-      .then(() => {
-        console.log('MQTT connection successful');
-        // Success is handled by the onStatusChange handler with 'connected' status
-      })
-      .catch(error => {
-        // Check for specific WebSocket connection errors
-        const errorMsg = error.message || 'Unknown error';
-        console.error('Failed to connect:', errorMsg);
-        
-        let errorTitle = "Connection Failed";
-        let errorDescription = `Failed to connect: ${errorMsg}`;
-        
-        // Provide more specific error messages based on error type/message
-        if (errorMsg.includes('WebSocket connection timeout')) {
-          errorTitle = "Connection Timeout";
-          errorDescription = "WebSocket connection timed out. Please check your network connection and try again.";
-        } else if (errorMsg.includes('WebSocket error')) {
-          errorTitle = "WebSocket Error";
-          errorDescription = "Failed to establish WebSocket connection. Please check if the server is running.";
-        } else if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('refused')) {
-          errorTitle = "Connection Refused";
-          errorDescription = "The MQTT broker refused the connection. Please check your broker address and credentials.";
-        }
-        
+      }).catch(error => {
+        console.error('Failed to connect:', error);
         setConnectionStatus('disconnected');
         toast({
-          title: errorTitle,
-          description: errorDescription,
+          title: "Connection Failed",
+          description: `Failed to connect: ${error.message}`,
           variant: "destructive",
           id: `conn-failed-${Date.now()}`
         });

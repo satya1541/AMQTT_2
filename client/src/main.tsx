@@ -5,8 +5,12 @@ import { ThemeProvider } from "@/hooks/use-theme";
 import { MQTTProvider } from "@/hooks/use-mqtt";
 import { registerServiceWorker } from "@/lib/pwa-utils";
 
-// Register service worker for PWA functionality
-registerServiceWorker();
+// Register service worker only in production
+if (import.meta.env.PROD) {
+  registerServiceWorker().catch(error => 
+    console.error('Service worker registration failed:', error)
+  );
+}
 
 createRoot(document.getElementById("root")!).render(
   <ThemeProvider>

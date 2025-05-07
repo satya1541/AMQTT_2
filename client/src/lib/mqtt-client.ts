@@ -44,7 +44,29 @@ export class WebSocketMqttClient {
         const wsUrl = `${protocol}//${window.location.host}/ws`;
         
         console.log(`Connecting to WebSocket server at ${wsUrl}`);
-        this.ws = new WebSocket(wsUrl);
+        try {
+          this.ws = new WebSocket(wsUrl);
+          console.log('WebSocket instance created successfully');
+          
+          // Set a timeout for connection
+          const connectTimeout = setTimeout(() => {
+            if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
+              console.error('WebSocket connection timeout');
+              this.ws.close();
+              this.notifyStatusChange('error', new Error('WebSocket connection timeout'));
+              reject(new Error('WebSocket connection timeout'));
+            }
+          }, 10000); // 10 second timeout
+          
+          // Clear timeout when connected
+          this.ws.addEventListener('open', () => {
+            clearTimeout(connectTimeout);
+          });
+          
+        } catch (error) {
+          console.error('Failed to create WebSocket:', error);
+          throw new Error(`Failed to create WebSocket: ${error}`);
+        }
         
         this.ws.onopen = () => {
           console.log('WebSocket connection established');

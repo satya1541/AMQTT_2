@@ -23,7 +23,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
   // Create WebSocket server with a distinct path (to avoid conflict with Vite HMR)
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  console.log('Setting up WebSocket server on path: /ws');
+  const wss = new WebSocketServer({ 
+    server: httpServer, 
+    path: '/ws',
+    clientTracking: true,
+    // Allow all origins
+    verifyClient: ({ origin, req, secure }, callback) => {
+      console.log(`WebSocket connection attempt from origin: ${origin || 'unknown'}`);
+      // Allow all connections
+      callback(true);
+    }
+  });
+  
+  // Track WebSocket server events
+  wss.on('listening', () => {
+    console.log('WebSocket server is listening');
+  });
+  
+  wss.on('error', (error) => {
+    console.error('WebSocket server error:', error);
+  });
   
   // Handle WebSocket connections
   wss.on('connection', (ws) => {
@@ -216,7 +236,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const qos = data.qos || 0;
     
     try {
-      connection.client.subscribe(topic, { qos }, (err, granted) => {
+      connection.client.subscribe(topic, { qos }, function(err: any, granted: any) {
+        const error = err ? new Error(err.message || 'Unknown error') : null;
         if (err) {
           console.error('Error subscribing to topic:', err);
           if (ws.readyState === WebSocket.OPEN) {
@@ -263,7 +284,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const topic = data.topic;
     
     try {
-      connection.client.unsubscribe(topic, (error: Error | null, packet?: any) => {
+      connection.client.unsubscribe(topic, function(err: any) {
+        const error = err ? new Error(err.message || 'Unknown error') : null;
         if (error) {
           console.error('Error unsubscribing from topic:', error);
           if (ws.readyState === WebSocket.OPEN) {
@@ -312,7 +334,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const retain = data.retain || false;
     
     try {
-      connection.client.publish(topic, message, { qos, retain }, (error: Error | null, packet?: any) => {
+      connection.client.publish(topic, message, { qos, retain }, function(err: any) {
+        const error = err ? new Error(err.message || 'Unknown error') : null;
         if (error) {
           console.error('Error publishing message:', error);
           if (ws.readyState === WebSocket.OPEN) {
@@ -351,7 +374,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       connections: {
         websocket: wss.clients.size,
         mqtt: mqttConnections.size
+      },
+      websocket: {
+        server: 'active',
+        path: '/ws'
       }
+    });
+  });
+  
+  // WebSocket health check endpoint
+  app.get('/api/ws-check', (req, res) => {
+    res.json({
+      websocket_server: 'active',
+      clients_connected: wss.clients.size,
+      path: '/ws',
+      mqtt_connections: mqttConnections.size
     });
   });
 

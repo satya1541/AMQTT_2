@@ -10,10 +10,9 @@ const STATIC_RESOURCES = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/mqtt-app-icon-192.png',
-  '/mqtt-app-icon-512.png',
-  '/mqtt-badge-96.png',
-  '/mqtt-splash-screen.png'
+  '/icon-192.png',
+  '/icon-512.png',
+  '/app-icon.svg'
 ];
 
 // Install event handler
@@ -143,8 +142,8 @@ self.addEventListener('push', (event) => {
   const title = notificationData.title || 'MQTT Explorer';
   const options = {
     body: notificationData.body || 'New notification',
-    icon: '/mqtt-app-icon-192.png',
-    badge: '/mqtt-badge-96.png',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     data: {
       url: notificationData.url || '/'
     }
