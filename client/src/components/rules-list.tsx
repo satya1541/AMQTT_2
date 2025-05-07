@@ -20,8 +20,40 @@ const RulesList: React.FC = () => {
     });
   };
 
-  const formatCondition = (rule: Rule): string => {
-    return `${rule.condition.key} ${rule.condition.operator} ${rule.condition.value}`;
+  const formatCondition = (rule: Rule): React.ReactNode => {
+    const baseCondition = `${rule.condition.key} ${rule.condition.operator} ${rule.condition.value}`;
+    
+    // If no threshold mode or simple mode, just return the basic condition
+    if (!rule.condition.thresholdMode || rule.condition.thresholdMode === 'simple') {
+      return baseCondition;
+    }
+    
+    // For sustained or average modes, add more details
+    let thresholdInfo = '';
+    
+    if (rule.condition.thresholdMode === 'sustained') {
+      thresholdInfo = `sustained for ${rule.condition.sustainedCount || 3} consecutive checks`;
+    } else if (rule.condition.thresholdMode === 'average') {
+      thresholdInfo = `average over ${rule.condition.averageCount || 5} data points`;
+    }
+    
+    return (
+      <>
+        {baseCondition}
+        <span className="block text-xs text-purple-400 mt-1">
+          {rule.condition.thresholdMode === 'sustained' ? '⏱️' : '📊'} {thresholdInfo}
+          {rule.condition.cooldownPeriod ? `, cooldown: ${formatTime(rule.condition.cooldownPeriod)}` : ''}
+        </span>
+      </>
+    );
+  };
+  
+  // Helper function to format time in ms to a readable format
+  const formatTime = (ms: number): string => {
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${Math.floor(ms / 1000)}s`;
+    if (ms < 3600000) return `${Math.floor(ms / 60000)}m`;
+    return `${Math.floor(ms / 3600000)}h`;
   };
 
   const formatActions = (rule: Rule): React.ReactNode => {
@@ -116,6 +148,20 @@ const RulesList: React.FC = () => {
               <div className="mt-2 text-sm">
                 <div className="text-gray-400">If: <span className="text-white">{formatCondition(rule)}</span></div>
                 <div className="text-gray-400">Then: {formatActions(rule)}</div>
+                
+                {/* Show rule metadata if available */}
+                {rule.metadata && rule.metadata.triggerCount !== undefined && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    <span className="inline-block mr-3">
+                      <span className="text-blue-400">Triggered:</span> {rule.metadata.triggerCount} times
+                    </span>
+                    {rule.metadata.lastTriggered && rule.metadata.lastTriggered > 0 && (
+                      <span>
+                        <span className="text-blue-400">Last:</span> {new Date(rule.metadata.lastTriggered).toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}

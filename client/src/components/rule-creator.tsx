@@ -14,9 +14,17 @@ interface RuleFormData {
   dataKey: string;
   operator: string;
   value: string;
+  // Enhanced threshold settings
+  thresholdMode: 'simple' | 'sustained' | 'average';
+  sustainedCount: number;
+  averageCount: number;
+  cooldownPeriod: number;
+  analysisTimeWindow: number;
+  // Alert settings
   showAlert: boolean;
   alertLevel: 'info' | 'warn' | 'error';
   alertMessage: string;
+  // Publish settings
   publishMessage: boolean;
   publishTopic: string;
   publishPayload: string;
@@ -29,9 +37,17 @@ const initialFormData: RuleFormData = {
   dataKey: 'metrics.temp',
   operator: '>',
   value: '25',
+  // Default threshold settings
+  thresholdMode: 'simple',
+  sustainedCount: 3,
+  averageCount: 5,
+  cooldownPeriod: 60000, // 1 minute in milliseconds
+  analysisTimeWindow: 300000, // 5 minutes in milliseconds
+  // Alert settings
   showAlert: true,
   alertLevel: 'warn',
   alertMessage: 'Temperature is too high!',
+  // Publish settings
   publishMessage: false,
   publishTopic: 'alerts/temperature',
   publishPayload: '{"alert": "Temperature exceeded threshold", "value": 25}',
@@ -168,7 +184,13 @@ const RuleCreator: React.FC = () => {
       condition: {
         key: formData.dataKey,
         operator: formData.operator,
-        value: formData.value
+        value: formData.value,
+        // Include threshold settings
+        thresholdMode: formData.thresholdMode,
+        sustainedCount: formData.sustainedCount,
+        averageCount: formData.averageCount,
+        cooldownPeriod: formData.cooldownPeriod,
+        analysisTimeWindow: formData.analysisTimeWindow
       },
       actions: {
         showAlert: formData.showAlert ? {
@@ -181,6 +203,13 @@ const RuleCreator: React.FC = () => {
           qos: formData.publishQos,
           retain: formData.publishRetain
         } : null
+      },
+      // Initialize metadata
+      metadata: {
+        lastTriggered: 0,
+        triggerCount: 0,
+        consecutiveTriggersCount: 0,
+        valuesHistory: []
       }
     };
     
@@ -267,6 +296,109 @@ const RuleCreator: React.FC = () => {
                 />
               </div>
             </div>
+            
+            <div className="mt-4 border-t border-gray-700 pt-4">
+              <h4 className="text-sm font-medium text-purple-400 mb-3">Advanced Threshold Settings</h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="block text-gray-400 text-sm mb-1">Threshold Mode</Label>
+                  <Select 
+                    value={formData.thresholdMode} 
+                    onValueChange={(value: 'simple' | 'sustained' | 'average') => handleChange('thresholdMode', value)}
+                  >
+                    <SelectTrigger className="bg-gray-700 border-gray-600 focus:border-purple-500">
+                      <SelectValue placeholder="Select threshold mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="simple">Simple (Trigger immediately)</SelectItem>
+                      <SelectItem value="sustained">Sustained (Require consecutive occurrences)</SelectItem>
+                      <SelectItem value="average">Average (Based on value average)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {formData.thresholdMode === 'sustained' && (
+                  <div>
+                    <Label className="block text-gray-400 text-sm mb-1">
+                      Consecutive Count
+                      <span className="text-gray-500 text-xs ml-1">(how many consecutive checks)</span>
+                    </Label>
+                    <Input
+                      type="number"
+                      min={2}
+                      className="bg-gray-700 rounded w-full px-3 py-2 border border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      value={formData.sustainedCount}
+                      onChange={(e) => handleChange('sustainedCount', parseInt(e.target.value) || 3)}
+                    />
+                  </div>
+                )}
+                
+                {formData.thresholdMode === 'average' && (
+                  <div>
+                    <Label className="block text-gray-400 text-sm mb-1">
+                      Average Count
+                      <span className="text-gray-500 text-xs ml-1">(how many data points to average)</span>
+                    </Label>
+                    <Input
+                      type="number"
+                      min={2}
+                      className="bg-gray-700 rounded w-full px-3 py-2 border border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      value={formData.averageCount}
+                      onChange={(e) => handleChange('averageCount', parseInt(e.target.value) || 5)}
+                    />
+                  </div>
+                )}
+                
+                <div>
+                  <Label className="block text-gray-400 text-sm mb-1">
+                    Cooldown Period (ms)
+                    <span className="text-gray-500 text-xs ml-1">(min time between alerts)</span>
+                  </Label>
+                  <Select 
+                    value={formData.cooldownPeriod.toString()} 
+                    onValueChange={(value) => handleChange('cooldownPeriod', parseInt(value))}
+                  >
+                    <SelectTrigger className="bg-gray-700 border-gray-600 focus:border-purple-500">
+                      <SelectValue placeholder="Select cooldown period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">No cooldown</SelectItem>
+                      <SelectItem value="5000">5 seconds</SelectItem>
+                      <SelectItem value="10000">10 seconds</SelectItem>
+                      <SelectItem value="30000">30 seconds</SelectItem>
+                      <SelectItem value="60000">1 minute</SelectItem>
+                      <SelectItem value="300000">5 minutes</SelectItem>
+                      <SelectItem value="600000">10 minutes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label className="block text-gray-400 text-sm mb-1">
+                    Analysis Window (ms)
+                    <span className="text-gray-500 text-xs ml-1">(time range for data analysis)</span>
+                  </Label>
+                  <Select 
+                    value={formData.analysisTimeWindow.toString()} 
+                    onValueChange={(value) => handleChange('analysisTimeWindow', parseInt(value))}
+                  >
+                    <SelectTrigger className="bg-gray-700 border-gray-600 focus:border-purple-500">
+                      <SelectValue placeholder="Select analysis window" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="60000">1 minute</SelectItem>
+                      <SelectItem value="300000">5 minutes</SelectItem>
+                      <SelectItem value="600000">10 minutes</SelectItem>
+                      <SelectItem value="1800000">30 minutes</SelectItem>
+                      <SelectItem value="3600000">1 hour</SelectItem>
+                      <SelectItem value="21600000">6 hours</SelectItem>
+                      <SelectItem value="86400000">24 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
           </div>
           
           {/* Then Actions */}
@@ -343,8 +475,7 @@ const RuleCreator: React.FC = () => {
                   
                   <div>
                     <Label className="block text-gray-400 text-sm mb-1">JSON Payload</Label>
-                    <Input
-                      as="textarea"
+                    <textarea
                       rows={3}
                       placeholder={'{"alert": "Temperature exceeded threshold", "value": 25}'}
                       className="font-mono bg-gray-700 rounded w-full px-3 py-2 text-sm border border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
