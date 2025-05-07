@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MQTT Visualizer - Simple App</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+      line-height: 1.6;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1, h2, h3 {
+      margin-bottom: 10px;
+      color: #2c3e50;
+    }
+    .card {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .btn {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.3s;
+    }
+    .btn:hover {
+      background-color: #2980b9;
+    }
+    .btn:disabled {
+      background-color: #95a5a6;
+      cursor: not-allowed;
+    }
+    .btn-success {
+      background-color: #2ecc71;
+    }
+    .btn-success:hover {
+      background-color: #27ae60;
+    }
+    .btn-danger {
+      background-color: #e74c3c;
+    }
+    .btn-danger:hover {
+      background-color: #c0392b;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .status {
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin: 10px 0;
+      font-weight: 500;
+    }
+    .status-success {
+      background-color: #d5f5e3;
+      color: #27ae60;
+    }
+    .status-error {
+      background-color: #fadbd8;
+      color: #c0392b;
+    }
+    .status-warning {
+      background-color: #fef9e7;
+      color: #f39c12;
+    }
+    .status-info {
+      background-color: #d6eaf8;
+      color: #2980b9;
+    }
+    .log-container {
+      background-color: #2c3e50;
+      color: #ecf0f1;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: monospace;
+    }
+    .log-item {
+      padding: 3px 0;
+      border-bottom: 1px solid #34495e;
+    }
+    .log-timestamp {
+      color: #95a5a6;
+      margin-right: 5px;
+    }
+    .log-error {
+      color: #e74c3c;
+    }
+    .log-success {
+      color: #2ecc71;
+    }
+    .log-info {
+      color: #3498db;
+    }
+    .navbar {
+      margin-bottom: 20px;
+      background-color: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .nav-links {
+      display: flex;
+      gap: 15px;
+    }
+    .nav-link {
+      color: #3498db;
+      text-decoration: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+    }
+    .nav-link:hover {
+      background-color: #f0f0f0;
+    }
+    .nav-link.active {
+      background-color: #3498db;
+      color: white;
+    }
+    .chart {
+      width: 100%;
+      height: 300px;
+      background-color: #fff;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .tabs {
+      display: flex;
+      background-color: #f0f0f0;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .tab:hover {
+      background-color: #e0e0e0;
+    }
+    .tab.active {
+      background-color: #3498db;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <h1>MQTT Visualizer</h1>
+    <div class="nav-links">
+      <a href="/" class="nav-link active">Home</a>
+      <a href="/diagnostic" class="nav-link">Diagnostic</a>
+      <a href="/test" class="nav-link">Test</a>
+      <a href="/basic-test.html" class="nav-link">WebSocket Test</a>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Connection</h2>
+      <div class="form-group">
+        <label for="broker-url">Broker URL</label>
+        <input type="text" id="broker-url" value="wss://broker.hivemq.com:8884/mqtt">
+      </div>
+      <div class="form-group">
+        <label for="client-id">Client ID</label>
+        <input type="text" id="client-id" value="mqtt-visualizer-client-">
+      </div>
+      <div class="form-group">
+        <label for="username">Username (Optional)</label>
+        <input type="text" id="username" placeholder="Username">
+      </div>
+      <div class="form-group">
+        <label for="password">Password (Optional)</label>
+        <input type="password" id="password" placeholder="Password">
+      </div>
+      <div id="connection-status" class="status status-info">Not connected</div>
+      <div>
+        <button id="connect-btn" class="btn">Connect</button>
+        <button id="disconnect-btn" class="btn btn-danger" disabled>Disconnect</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Subscribe</h2>
+      <div class="form-group">
+        <label for="topic">Topic</label>
+        <input type="text" id="topic" value="test/topic/#">
+      </div>
+      <div class="form-group">
+        <label for="qos">QoS</label>
+        <select id="qos">
+          <option value="0">0 - At most once</option>
+          <option value="1" selected>1 - At least once</option>
+          <option value="2">2 - Exactly once</option>
+        </select>
+      </div>
+      <div>
+        <button id="subscribe-btn" class="btn" disabled>Subscribe</button>
+        <button id="unsubscribe-btn" class="btn btn-danger" disabled>Unsubscribe</button>
+      </div>
+      <div class="form-group" style="margin-top: 20px;">
+        <label>Active Subscriptions</label>
+        <div id="subscriptions-list" style="margin-top: 5px;">None</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Publish Message</h2>
+    <div class="grid" style="grid-template-columns: 1fr 2fr;">
+      <div>
+        <div class="form-group">
+          <label for="publish-topic">Topic</label>
+          <input type="text" id="publish-topic" value="test/topic">
+        </div>
+        <div class="form-group">
+          <label for="publish-qos">QoS</label>
+          <select id="publish-qos">
+            <option value="0">0 - At most once</option>
+            <option value="1" selected>1 - At least once</option>
+            <option value="2">2 - Exactly once</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="retain">Retain</label>
+          <select id="retain">
+            <option value="false" selected>False</option>
+            <option value="true">True</option>
+          </select>
+        </div>
+        <button id="publish-btn" class="btn btn-success" disabled>Publish</button>
+      </div>
+      <div>
+        <div class="form-group">
+          <label for="message">Message Payload</label>
+          <textarea id="message" rows="8">{
+  "temperature": 22.5,
+  "humidity": 45,
+  "status": "normal",
+  "timestamp": 1620000000
+}</textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Messages</h2>
+    <div class="tabs">
+      <div class="tab active" data-tab="received">Received Messages</div>
+      <div class="tab" data-tab="published">Published Messages</div>
+    </div>
+    <div id="messages-container" class="log-container"></div>
+  </div>
+
+  <script>
+    // DOM Elements
+    const brokerUrlInput = document.getElementById('broker-url');
+    const clientIdInput = document.getElementById('client-id');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const connectionStatusDiv = document.getElementById('connection-status');
+    const connectBtn = document.getElementById('connect-btn');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    const topicInput = document.getElementById('topic');
+    const qosSelect = document.getElementById('qos');
+    const subscribeBtn = document.getElementById('subscribe-btn');
+    const unsubscribeBtn = document.getElementById('unsubscribe-btn');
+    const subscriptionsList = document.getElementById('subscriptions-list');
+    const publishTopicInput = document.getElementById('publish-topic');
+    const publishQosSelect = document.getElementById('publish-qos');
+    const retainSelect = document.getElementById('retain');
+    const messageTextarea = document.getElementById('message');
+    const publishBtn = document.getElementById('publish-btn');
+    const messagesContainer = document.getElementById('messages-container');
+    
+    // Generate random client ID if not specified
+    clientIdInput.value += Math.random().toString(16).substr(2, 8);
+    
+    // WebSocket Connection
+    let ws = null;
+    let connected = false;
+    let activeSubscriptions = new Set();
+    
+    // Connect to WebSocket server
+    connectBtn.addEventListener('click', () => {
+      const brokerUrl = brokerUrlInput.value.trim();
+      const clientId = clientIdInput.value.trim();
+      const username = usernameInput.value.trim();
+      const password = passwordInput.value.trim();
+      
+      if (!brokerUrl) {
+        logMessage('Broker URL is required', 'error');
+        return;
+      }
+      
+      connectionStatusDiv.textContent = 'Connecting...';
+      connectionStatusDiv.className = 'status status-warning';
+      
+      try {
+        // Create WebSocket connection to our server
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        
+        logMessage(`Connecting to WebSocket server at ${wsUrl}...`, 'info');
+        
+        ws = new WebSocket(wsUrl);
+        
+        // Connection timeout after 10 seconds
+        const connectTimeout = setTimeout(() => {
+          if (ws && ws.readyState !== WebSocket.OPEN) {
+            logMessage('WebSocket connection timeout', 'error');
+            ws.close();
+          }
+        }, 10000);
+        
+        ws.onopen = () => {
+          clearTimeout(connectTimeout);
+          logMessage('WebSocket connection established', 'success');
+          
+          // Send connect message to MQTT broker
+          ws.send(JSON.stringify({
+            type: 'connect',
+            brokerUrl,
+            clientId,
+            username: username || undefined,
+            password: password || undefined,
+            clean: true,
+            reconnectPeriod: 5000
+          }));
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            
+            switch (data.type) {
+              case 'info':
+                logMessage(`Server: ${data.message}`, 'info');
+                break;
+                
+              case 'mqtt-connected':
+                logMessage('MQTT client connected to broker', 'success');
+                connectionStatusDiv.textContent = 'Connected';
+                connectionStatusDiv.className = 'status status-success';
+                connected = true;
+                updateButtonStates();
+                break;
+                
+              case 'mqtt-reconnecting':
+                logMessage('MQTT client reconnecting...', 'warning');
+                connectionStatusDiv.textContent = 'Reconnecting...';
+                connectionStatusDiv.className = 'status status-warning';
+                break;
+                
+              case 'mqtt-disconnected':
+                logMessage('MQTT client disconnected', 'warning');
+                connectionStatusDiv.textContent = 'Disconnected';
+                connectionStatusDiv.className = 'status status-error';
+                connected = false;
+                updateButtonStates();
+                break;
+                
+              case 'mqtt-offline':
+                logMessage('MQTT client offline', 'warning');
+                connectionStatusDiv.textContent = 'Offline';
+                connectionStatusDiv.className = 'status status-warning';
+                break;
+                
+              case 'mqtt-error':
+                logMessage(`MQTT error: ${data.error}`, 'error');
+                connectionStatusDiv.textContent = `Error: ${data.error}`;
+                connectionStatusDiv.className = 'status status-error';
+                break;
+                
+              case 'mqtt-message':
+                logMessage(`Received message on topic "${data.topic}": ${data.payload}`, 'success');
+                addMessageToLog(data);
+                break;
+                
+              case 'mqtt-subscribed':
+                logMessage(`Subscribed to topic: ${data.topic} with QoS: ${data.qos}`, 'success');
+                activeSubscriptions.add(data.topic);
+                updateSubscriptionsList();
+                break;
+                
+              case 'mqtt-unsubscribed':
+                logMessage(`Unsubscribed from topic: ${data.topic}`, 'info');
+                activeSubscriptions.delete(data.topic);
+                updateSubscriptionsList();
+                break;
+                
+              case 'mqtt-published':
+                logMessage(`Published message to topic: ${data.topic}`, 'success');
+                break;
+                
+              case 'error':
+                logMessage(`WebSocket error: ${data.message}`, 'error');
+                break;
+                
+              default:
+                logMessage(`Unknown message type: ${data.type}`, 'warning');
+            }
+          } catch (error) {
+            logMessage(`Error processing WebSocket message: ${error.message}`, 'error');
+          }
+        };
+        
+        ws.onclose = () => {
+          clearTimeout(connectTimeout);
+          logMessage('WebSocket connection closed', 'warning');
+          connectionStatusDiv.textContent = 'Disconnected';
+          connectionStatusDiv.className = 'status status-error';
+          connected = false;
+          updateButtonStates();
+          ws = null;
+        };
+        
+        ws.onerror = (error) => {
+          clearTimeout(connectTimeout);
+          logMessage(`WebSocket error: ${error.message || 'Unknown error'}`, 'error');
+          connectionStatusDiv.textContent = 'Connection Error';
+          connectionStatusDiv.className = 'status status-error';
+        };
+        
+      } catch (error) {
+        logMessage(`Error creating WebSocket: ${error.message}`, 'error');
+        connectionStatusDiv.textContent = `Error: ${error.message}`;
+        connectionStatusDiv.className = 'status status-error';
+      }
+    });
+    
+    // Disconnect from MQTT broker
+    disconnectBtn.addEventListener('click', () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        logMessage('Not connected to WebSocket server', 'warning');
+        return;
+      }
+      
+      try {
+        // Send disconnect message to MQTT broker
+        ws.send(JSON.stringify({ type: 'disconnect' }));
+        logMessage('Disconnecting from MQTT broker...', 'info');
+      } catch (error) {
+        logMessage(`Error disconnecting from MQTT broker: ${error.message}`, 'error');
+      }
+    });
+    
+    // Subscribe to topic
+    subscribeBtn.addEventListener('click', () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN || !connected) {
+        logMessage('Not connected to MQTT broker', 'warning');
+        return;
+      }
+      
+      const topic = topicInput.value.trim();
+      const qos = parseInt(qosSelect.value);
+      
+      if (!topic) {
+        logMessage('Topic is required', 'error');
+        return;
+      }
+      
+      try {
+        ws.send(JSON.stringify({
+          type: 'subscribe',
+          topic,
+          qos
+        }));
+        
+        logMessage(`Subscribing to topic: ${topic} with QoS: ${qos}...`, 'info');
+      } catch (error) {
+        logMessage(`Error subscribing to topic: ${error.message}`, 'error');
+      }
+    });
+    
+    // Unsubscribe from topic
+    unsubscribeBtn.addEventListener('click', () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN || !connected) {
+        logMessage('Not connected to MQTT broker', 'warning');
+        return;
+      }
+      
+      const topic = topicInput.value.trim();
+      
+      if (!topic) {
+        logMessage('Topic is required', 'error');
+        return;
+      }
+      
+      try {
+        ws.send(JSON.stringify({
+          type: 'unsubscribe',
+          topic
+        }));
+        
+        logMessage(`Unsubscribing from topic: ${topic}...`, 'info');
+      } catch (error) {
+        logMessage(`Error unsubscribing from topic: ${error.message}`, 'error');
+      }
+    });
+    
+    // Publish message
+    publishBtn.addEventListener('click', () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN || !connected) {
+        logMessage('Not connected to MQTT broker', 'warning');
+        return;
+      }
+      
+      const topic = publishTopicInput.value.trim();
+      const qos = parseInt(publishQosSelect.value);
+      const retain = retainSelect.value === 'true';
+      const message = messageTextarea.value.trim();
+      
+      if (!topic) {
+        logMessage('Publish topic is required', 'error');
+        return;
+      }
+      
+      if (!message) {
+        logMessage('Message is required', 'error');
+        return;
+      }
+      
+      try {
+        ws.send(JSON.stringify({
+          type: 'publish',
+          topic,
+          message,
+          qos,
+          retain
+        }));
+        
+        logMessage(`Publishing message to topic: ${topic}...`, 'info');
+      } catch (error) {
+        logMessage(`Error publishing message: ${error.message}`, 'error');
+      }
+    });
+    
+    // Update button states based on connection status
+    function updateButtonStates() {
+      connectBtn.disabled = connected;
+      disconnectBtn.disabled = !connected;
+      subscribeBtn.disabled = !connected;
+      unsubscribeBtn.disabled = !connected;
+      publishBtn.disabled = !connected;
+    }
+    
+    // Update subscriptions list
+    function updateSubscriptionsList() {
+      if (activeSubscriptions.size === 0) {
+        subscriptionsList.textContent = 'None';
+        return;
+      }
+      
+      subscriptionsList.innerHTML = Array.from(activeSubscriptions)
+        .map(topic => `<div>${topic}</div>`)
+        .join('');
+    }
+    
+    // Add message to log
+    function addMessageToLog(message) {
+      const messageElement = document.createElement('div');
+      messageElement.className = 'log-item';
+      
+      const timestamp = new Date(message.timestamp).toLocaleTimeString();
+      let payloadStr = message.payload;
+      
+      // Try to format JSON payloads
+      try {
+        const payloadObj = JSON.parse(message.payload);
+        payloadStr = JSON.stringify(payloadObj, null, 2);
+      } catch (error) {
+        // Not JSON, leave as is
+      }
+      
+      messageElement.innerHTML = `
+        <span class="log-timestamp">[${timestamp}]</span>
+        <strong>${message.topic}</strong>
+        <pre>${payloadStr}</pre>
+      `;
+      
+      messagesContainer.appendChild(messageElement);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    
+    // Log message to console and UI
+    function logMessage(message, type = 'info') {
+      console.log(`[${type.toUpperCase()}] ${message}`);
+      
+      const logElement = document.createElement('div');
+      logElement.className = `log-item log-${type}`;
+      
+      const timestamp = new Date().toLocaleTimeString();
+      logElement.innerHTML = `<span class="log-timestamp">[${timestamp}]</span> ${message}`;
+      
+      messagesContainer.appendChild(logElement);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    
+    // Init
+    window.addEventListener('load', () => {
+      logMessage('Application loaded', 'info');
+      updateButtonStates();
+      updateSubscriptionsList();
+    });
+  </script>
+</body>
+</html>
