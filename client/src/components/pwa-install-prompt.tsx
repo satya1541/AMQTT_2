@@ -3,6 +3,14 @@ import { promptInstall, isRunningAsPwa, isInstallAvailable } from '@/lib/pwa-uti
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle 
+} from '@/components/ui/dialog';
 
 interface PWAInstallPromptProps {
   className?: string;
@@ -39,76 +47,123 @@ const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ className }) => {
     // Check if the app is already installed
     setIsPwa(isRunningAsPwa());
     
-    // Listen for the beforeinstallprompt event to detect if we can install
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setCanInstall(true);
-      
+    // Check if install is available using our utility function
+    setCanInstall(isInstallAvailable());
+    
+    // Show the prompt after a short delay if we're in a dev environment or install is available
+    const isDev = import.meta.env.DEV;
+    if ((isDev || isInstallAvailable()) && !isPwa) {
       // Show the prompt after the UI has loaded
       setTimeout(() => {
         setShowPrompt(true);
       }, 2000);
-    };
-    
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    
-    // In development environments, we might want to show the prompt anyway
-    // after a short delay (for testing purposes)
-    const isDev = import.meta.env.DEV;
-    if (isDev && !isPwa) {
-      setTimeout(() => {
-        setShowPrompt(true);
-      }, 2000);
     }
+    
+    // Check periodically if installation becomes available
+    const checkInstallInterval = setInterval(() => {
+      const canInstallNow = isInstallAvailable();
+      if (canInstallNow && !canInstall) {
+        setCanInstall(true);
+        setShowPrompt(true);
+      }
+    }, 3000);
     
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      clearInterval(checkInstallInterval);
     };
-  }, []);
+  }, [canInstall]);
 
   // Handle the install button click
+  const [showManualInstructions, setShowManualInstructions] = useState<boolean>(false);
+
   const handleInstallClick = () => {
     if (canInstall) {
+      // Try automatic installation
       showInstallPrompt();
     } else {
-      // Manual installation instructions if install API isn't available
-      toast({
-        title: "Installation Info",
-        description: "To install this app, use your browser's 'Add to Home Screen' or 'Install' option from the menu.",
-        variant: "info",
-        id: Date.now().toString()
-      });
-      setInstallAttempted(true);
-      setShowPrompt(false);
+      // Show manual installation instructions
+      setShowManualInstructions(true);
     }
+  };
+
+  const closeManualInstructions = () => {
+    setShowManualInstructions(false);
+    setInstallAttempted(true);
+    setShowPrompt(false);
   };
 
   // Don't render anything if it's already a PWA or prompt shouldn't be shown
   if (isPwa || !showPrompt || installAttempted) return null;
 
   return (
-    <AnimatePresence>
-      <motion.div 
-        className={`p-4 rounded-lg bg-opacity-90 backdrop-blur-sm bg-gray-800 border border-purple-600/50 shadow-lg ${className}`}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        transition={{ duration: 0.3 }}
-      >
-        <div className="flex items-center gap-4">
-          <div className="text-white flex-1">
-            <h3 className="text-lg font-bold mb-1">Install MQTT Explorer</h3>
-            <p className="text-sm text-gray-300">Use offline and get a better experience!</p>
+    <>
+      <AnimatePresence>
+        <motion.div 
+          className={`p-4 rounded-lg bg-opacity-90 backdrop-blur-sm bg-gray-800 border border-purple-600/50 shadow-lg ${className}`}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="flex items-center gap-4">
+            <div className="text-white flex-1">
+              <h3 className="text-lg font-bold mb-1">Install MQTT Explorer</h3>
+              <p className="text-sm text-gray-300">Use offline and get a better experience!</p>
+            </div>
+            <Button 
+              onClick={handleInstallClick}
+              className="bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-500 hover:to-purple-600"
+            >
+              <i className="fas fa-download mr-2"></i> Install
+            </Button>
           </div>
-          <Button 
-            onClick={handleInstallClick}
-            className="bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-500 hover:to-purple-600"
-          >
-            <i className="fas fa-download mr-2"></i> Install
-          </Button>
-        </div>
-      </motion.div>
-    </AnimatePresence>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Manual installation dialog */}
+      <Dialog open={showManualInstructions} onOpenChange={closeManualInstructions}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>How to Install MQTT Explorer</DialogTitle>
+            <DialogDescription>
+              Follow these steps to install the app on your device
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">For Chrome, Edge, or other Chromium browsers:</h3>
+              <ol className="list-decimal ml-5 text-sm space-y-2">
+                <li>Click the three dots menu (⋮) in the top right</li>
+                <li>Select "Install MQTT Explorer..." or "Install app"</li>
+                <li>Follow the installation prompts</li>
+              </ol>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">For Safari on iOS:</h3>
+              <ol className="list-decimal ml-5 text-sm space-y-2">
+                <li>Tap the Share button (rectangle with arrow)</li>
+                <li>Scroll down and tap "Add to Home Screen"</li>
+                <li>Tap "Add" in the top right</li>
+              </ol>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">For Firefox:</h3>
+              <ol className="list-decimal ml-5 text-sm space-y-2">
+                <li>Currently, Firefox doesn't fully support PWA installation</li>
+                <li>You can use "Add to Home Screen" option on mobile or bookmark the app</li>
+              </ol>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button onClick={closeManualInstructions}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
