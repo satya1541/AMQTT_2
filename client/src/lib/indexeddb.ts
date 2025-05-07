@@ -135,8 +135,6 @@ function openDatabase(): Promise<IDBDatabase> {
     }
   });
 }
-  });
-}
 
 export async function storeMessage(message: MqttMessage): Promise<void> {
   try {
