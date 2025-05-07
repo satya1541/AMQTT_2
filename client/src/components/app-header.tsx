@@ -158,6 +158,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
           <TabsList className="w-full justify-start h-auto bg-transparent">
             {[
               { path: '/', icon: 'network-wired', label: 'Connection' },
+              { path: '/live-feed', icon: 'stream', label: 'Live Feed' },
               { path: '/visualize', icon: 'chart-line', label: 'Visualize' },
               { path: '/rules', icon: 'brain', label: 'AI & Rules' },
               { path: '/history', icon: 'history', label: 'History' },

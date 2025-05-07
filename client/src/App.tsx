@@ -8,6 +8,7 @@ import Visualize from "@/pages/visualize";
 import Rules from "@/pages/rules";
 import History from "@/pages/history";
 import Settings from "@/pages/settings";
+import LiveFeed from "@/pages/live-feed";
 import AppHeader from "@/components/app-header";
 import { useEffect, useState } from "react";
 import { MQTTProvider } from "@/hooks/use-mqtt";
@@ -50,6 +51,7 @@ function Router() {
           <Route path="/visualize" component={Visualize} />
           <Route path="/rules" component={Rules} />
           <Route path="/history" component={History} />
+          <Route path="/live-feed" component={LiveFeed} />
           <Route path="/settings" component={Settings} />
           {/* Fallback to 404 */}
           <Route component={NotFound} />
