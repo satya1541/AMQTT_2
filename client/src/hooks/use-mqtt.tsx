@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import mqtt, { IClientOptions, MqttClient, ISubscriptionGrant } from 'mqtt';
 import { useToast } from './use-toast';
-import { storeMessage, getMessages } from '@/lib/indexeddb';
+import { storeMessage, getMessages, ExtendedMqttMessage } from '@/lib/indexeddb';
 import { loadSetting, saveSetting } from '@/lib/storage';
+import { queueMessageForPublish, registerBackgroundSync } from '@/lib/background-sync';
+import { trackMessagePublished, trackConnection, trackError, initializeAnalytics } from '@/lib/offline-analytics';
 
 // Types
 export interface MqttMessage {
@@ -193,6 +195,26 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [messages, pauseAutoScroll]);
 
+  // Initialize analytics and background sync
+  useEffect(() => {
+    // Initialize analytics
+    initializeAnalytics();
+    
+    // Register background sync
+    registerBackgroundSync();
+    
+    // Add service worker message listener
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'PROCESS_PUBLISH_QUEUE') {
+          // When the service worker asks us to process the publish queue
+          console.log('Received request to process publish queue');
+          // We would normally implement this to publish queued messages
+        }
+      });
+    }
+  }, []);
+
   // Connect to MQTT broker
   const connect = useCallback((options: ConnectionOptions) => {
     if (client) {
@@ -204,6 +226,7 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
       title: "Connecting",
       description: `Connecting to ${options.brokerUrl}...`,
       variant: "connecting",
+      id: Date.now().toString()
     });
 
     try {
@@ -221,10 +244,15 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
       mqttClient.on('connect', () => {
         setConnectionStatus('connected');
         setConnectionOptions(options);
+        
+        // Track successful connection in analytics
+        trackConnection(options.brokerUrl, true);
+        
         toast({
           title: "Connected",
           description: `Successfully connected to ${options.brokerUrl}`,
           variant: "success",
+          id: Date.now().toString()
         });
 
         // Subscribe to base topic
