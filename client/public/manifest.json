@@ -1,12 +1,11 @@
 {
   "name": "MQTT Explorer",
-  "short_name": "MQTT",
-  "description": "Advanced MQTT client for testing and visualizing IoT data streams",
+  "short_name": "MQTT Explorer",
+  "description": "A sophisticated MQTT client for real-time message monitoring and visualization",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1e293b",
-  "theme_color": "#3b82f6",
-  "orientation": "any",
+  "background_color": "#650E9C",
+  "theme_color": "#7E22CE",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -21,41 +20,8 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [
-    {
-      "src": "/mqtt-screenshot-home.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "platform": "wide",
-      "label": "Home screen of MQTT Explorer"
-    },
-    {
-      "src": "/mqtt-screenshot-charts.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "platform": "wide",
-      "label": "Real-time data visualization"
-    }
-  ],
-  "related_applications": [],
-  "prefer_related_applications": false,
-  "shortcuts": [
-    {
-      "name": "Connect",
-      "short_name": "Connect",
-      "description": "Connect to a broker",
-      "url": "/?action=connect",
-      "icons": [{ "src": "/mqtt-shortcut-connect.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "View Data",
-      "short_name": "Data",
-      "description": "View message history",
-      "url": "/history",
-      "icons": [{ "src": "/mqtt-shortcut-history.png", "sizes": "96x96" }]
-    }
-  ],
-  "categories": ["utilities", "developer tools", "iot"],
-  "dir": "ltr",
-  "lang": "en"
+  "lang": "en-US",
+  "orientation": "any",
+  "categories": ["utilities", "developer tools", "productivity"],
+  "scope": "/"
 }

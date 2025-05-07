@@ -8,8 +8,6 @@ import Visualize from "@/pages/visualize";
 import Rules from "@/pages/rules";
 import History from "@/pages/history";
 import Settings from "@/pages/settings";
-import Diagnostic from "@/pages/diagnostic";
-import TestPage from "@/pages/test";
 import AppHeader from "@/components/app-header";
 import { useEffect, useState } from "react";
 import { MQTTProvider } from "@/hooks/use-mqtt";
@@ -53,8 +51,6 @@ function Router() {
           <Route path="/rules" component={Rules} />
           <Route path="/history" component={History} />
           <Route path="/settings" component={Settings} />
-          <Route path="/diagnostic" component={Diagnostic} />
-          <Route path="/test" component={TestPage} />
           {/* Fallback to 404 */}
           <Route component={NotFound} />
         </Switch>
@@ -75,23 +71,7 @@ function Router() {
 
 function App() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
-
-  // Error boundary for the entire app
-  useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      console.error("Global error caught:", event.error);
-      setError(event.error);
-      event.preventDefault();
-    };
-
-    window.addEventListener('error', handleError);
-    
-    return () => {
-      window.removeEventListener('error', handleError);
-    };
-  }, []);
 
   // Check for service worker updates
   useEffect(() => {
@@ -101,31 +81,12 @@ function App() {
         toast({
           title: "Update Available",
           description: "A new version is available. The app will update automatically.",
-          variant: "info"
+          variant: "info",
+          id: Date.now().toString()
         });
       });
     }
   }, [toast]);
-
-  // Show error UI if there's a critical error
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
-        <div className="bg-red-900/70 p-6 rounded-lg max-w-lg w-full text-center">
-          <h1 className="text-2xl font-bold mb-4">Something went wrong</h1>
-          <div className="mb-4 text-red-200 overflow-auto max-h-40 p-2 bg-red-950/50 rounded text-left">
-            <p className="font-mono text-sm">{error.message}</p>
-          </div>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded"
-          >
-            Refresh Page
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <QueryClientProvider client={queryClient}>
