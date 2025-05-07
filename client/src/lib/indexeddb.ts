@@ -2,31 +2,139 @@ import { MqttMessage } from '@/hooks/use-mqtt';
 
 // IndexedDB setup
 const DB_NAME = 'mqtt-explorer';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Increment version number to handle schema changes
 const MESSAGES_STORE = 'messages';
 
+// Helper function to delete the database if needed in case of corruption or version conflicts
+export function deleteDatabase(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    
+    request.onsuccess = () => {
+      console.log('Successfully deleted database');
+      resolve();
+    };
+    
+    request.onerror = (event) => {
+      console.error('Failed to delete database:', (event.target as IDBOpenDBRequest).error);
+      reject((event.target as IDBOpenDBRequest).error);
+    };
+    
+    request.onblocked = () => {
+      console.warn('Database deletion blocked - close all other tabs and try again');
+      reject(new Error('Database deletion blocked'));
+    };
+  });
+}
+
+// Try to open database with better error handling for version conflicts
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = (event) => {
-      reject('Error opening IndexedDB: ' + (event.target as IDBOpenDBRequest).error);
-    };
-
-    request.onsuccess = (event) => {
-      resolve((event.target as IDBOpenDBRequest).result);
-    };
-
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      
-      // Create messages store with indexes
-      if (!db.objectStoreNames.contains(MESSAGES_STORE)) {
-        const store = db.createObjectStore(MESSAGES_STORE, { keyPath: 'id' });
-        store.createIndex('timestamp', 'timestamp', { unique: false });
-        store.createIndex('topic', 'topic', { unique: false });
+    try {
+      // Check if IndexedDB is available
+      if (!window.indexedDB) {
+        reject(new Error('Your browser does not support IndexedDB'));
+        return;
       }
-    };
+      
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+      // Handle database opening errors
+      request.onerror = (event) => {
+        const target = event.target as IDBOpenDBRequest;
+        const error = target?.error;
+        console.error('Error opening IndexedDB:', error);
+        
+        // Handle version error by deleting and recreating the database
+        if (error && error.name === 'VersionError') {
+          console.warn('Version error detected, attempting to delete and recreate database');
+          
+          deleteDatabase()
+            .then(() => {
+              // Try opening again after deletion
+              const retryRequest = indexedDB.open(DB_NAME, DB_VERSION);
+              
+              retryRequest.onsuccess = (e) => {
+                console.log('Successfully reopened database after deletion');
+                resolve((e.target as IDBOpenDBRequest).result);
+              };
+              
+              retryRequest.onerror = (e) => {
+                console.error('Failed to reopen database after deletion:', (e.target as IDBOpenDBRequest).error);
+                reject('Error reopening IndexedDB: ' + (e.target as IDBOpenDBRequest).error);
+              };
+              
+              retryRequest.onupgradeneeded = (e) => {
+                const db = (e.target as IDBOpenDBRequest).result;
+                console.log('Creating new object stores after database deletion');
+                
+                if (!db.objectStoreNames.contains(MESSAGES_STORE)) {
+                  const store = db.createObjectStore(MESSAGES_STORE, { keyPath: 'id' });
+                  store.createIndex('timestamp', 'timestamp', { unique: false });
+                  store.createIndex('topic', 'topic', { unique: false });
+                  store.createIndex('payloadLength', 'payload.length', { unique: false });
+                }
+              };
+            })
+            .catch((deleteError) => {
+              console.error('Failed to resolve version conflict:', deleteError);
+              reject('Could not fix database version conflict: ' + deleteError);
+            });
+        } else {
+          reject('Error opening IndexedDB: ' + error);
+        }
+      };
+
+      // Handle successful database opening
+      request.onsuccess = (event) => {
+        console.log('Successfully opened database');
+        resolve((event.target as IDBOpenDBRequest).result);
+      };
+
+      // Handle database version upgrade
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        const oldVersion = event.oldVersion;
+        const newVersion = event.newVersion || DB_VERSION;
+        
+        console.log(`Upgrading IndexedDB from version ${oldVersion} to ${newVersion}`);
+        
+        // Handle upgrade based on old version
+        if (oldVersion < 1) {
+          // Initial database setup (for new installations)
+          if (!db.objectStoreNames.contains(MESSAGES_STORE)) {
+            const store = db.createObjectStore(MESSAGES_STORE, { keyPath: 'id' });
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+            store.createIndex('topic', 'topic', { unique: false });
+          }
+        }
+        
+        if (oldVersion < 2) {
+          // Changes for version 2 - add or modify existing schema
+          console.log('Upgrading to database version 2');
+          
+          // Get existing object store if it exists
+          if (db.objectStoreNames.contains(MESSAGES_STORE)) {
+            try {
+              const store = db.transaction([MESSAGES_STORE], 'readwrite').objectStore(MESSAGES_STORE);
+              
+              // Add new indexes if they don't exist
+              if (!store.indexNames.contains('payloadLength')) {
+                console.log('Adding payloadLength index to messages store');
+                store.createIndex('payloadLength', 'payload.length', { unique: false });
+              }
+            } catch (error) {
+              console.error('Error upgrading database schema:', error);
+            }
+          }
+        }
+      };
+    } catch (error) {
+      console.error('Error in openDatabase:', error);
+      reject(`Failed to open database: ${error}`);
+    }
+  });
+}
   });
 }
 
