@@ -5,19 +5,24 @@ import {
   type ToastOptions as ToastOptionsOriginal,
 } from "@/components/ui/use-toast"
 
-export interface ToastOptions extends ToastOptionsOriginal {
+// Modify the interface to include all required fields
+export interface ToastOptions {
+  id: string
   title?: string
   description?: React.ReactNode
   action?: ToastActionElement
   variant?: "default" | "destructive" | "success" | "warning" | "info" | "connecting"
+  duration?: number
+  className?: string
 }
 
 export const useToast = () => {
   const { toast: originalToast, ...rest } = useToastOriginal()
 
-  const toast = ({ title, description, action, variant, ...props }: ToastOptions) => {
+  const toast = ({ title, description, action, variant, id, ...props }: Partial<ToastOptions>) => {
     originalToast({
       ...props,
+      id: id || Date.now().toString(), // Add ID if not provided
       className: variant && (
         variant === "success" ? "bg-green-800 border-green-500 text-green-100" : 
         variant === "warning" ? "bg-yellow-800 border-yellow-500 text-yellow-100" : 

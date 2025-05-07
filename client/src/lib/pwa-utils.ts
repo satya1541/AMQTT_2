@@ -25,8 +25,10 @@ export function registerServiceWorker() {
     // Register the service worker
     wb.register()
       .then((reg) => {
-        registration = reg;
-        console.log('Service Worker registered successfully:', reg);
+        if (reg) {
+          registration = reg;
+          console.log('Service Worker registered successfully:', reg);
+        }
       })
       .catch((err) => {
         console.error('Service Worker registration failed:', err);
