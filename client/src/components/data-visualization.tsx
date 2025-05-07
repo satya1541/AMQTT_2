@@ -38,11 +38,15 @@ interface ChartData {
 
 const DataVisualization: React.FC = () => {
   const { messages } = useMqtt();
-  const { settings: chartSettings, updateSettings } = useCharts();
+  const { settings: chartSettings } = useCharts();
+  const isMobile = useMobile();
+  
   const [dataKeys, setDataKeys] = useState<DataKey[]>([]);
   const [charts, setCharts] = useState<ChartData[]>([]);
   const [chartType, setChartType] = useState<string>(chartSettings.defaultType);
   const [chartColor, setChartColor] = useState<string>(chartSettings.defaultColor);
+  const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [showExport, setShowExport] = useState<boolean>(false);
   
   const chartRefs = useRef<Map<string, HTMLCanvasElement | null>>(new Map());
 
@@ -120,21 +124,22 @@ const DataVisualization: React.FC = () => {
     });
   }, [dataKeys, chartType, chartColor]);
 
-  // Initialize or update charts when charts array changes
+  // Handle rendering charts
   useEffect(() => {
+    // Create charts only when we have data to show
     charts.forEach(chartData => {
-      const canvas = chartRefs.current.get(chartData.id);
-      if (!canvas) return;
-      
-      // Destroy existing chart instance if it exists
+      const canvasElement = chartRefs.current.get(chartData.id);
+      if (!canvasElement) return;
+
+      // Clear existing chart
       if (chartData.chart) {
         chartData.chart.destroy();
       }
-      
-      // Create new chart
-      const ctx = canvas.getContext('2d');
+
+      const ctx = canvasElement.getContext('2d');
       if (!ctx) return;
-      
+
+      // Create new chart
       const newChart = new Chart(ctx, {
         type: chartData.type as any,
         data: {
@@ -180,12 +185,10 @@ const DataVisualization: React.FC = () => {
               }
             }
           } : undefined,
-          animation: {
-            duration: chartSettings.animation ? 300 : 0
-          }
+          animation: chartSettings.animation ? {} : false
         }
       });
-      
+
       // Update chart reference in state
       setCharts(prevCharts => 
         prevCharts.map(c => 
@@ -195,8 +198,8 @@ const DataVisualization: React.FC = () => {
         )
       );
     });
-    
-    // Cleanup on unmount
+
+    // Cleanup on unmount or when charts change
     return () => {
       charts.forEach(chart => {
         if (chart.chart) {
@@ -204,7 +207,7 @@ const DataVisualization: React.FC = () => {
         }
       });
     };
-  }, [charts.length]);
+  }, [charts, chartSettings]);
 
   // Handle toggling data keys
   const handleKeyToggle = (path: string, checked: boolean) => {
@@ -251,7 +254,10 @@ const DataVisualization: React.FC = () => {
         return;
       }
       
+      // Update each chart if it's showing a key that's in this message
       setCharts(prevCharts => {
+        if (!prevCharts.length) return prevCharts;
+        
         return prevCharts.map(chartData => {
           // Extract value for this chart's key
           const value = getValueByPath(payload, chartData.key);
@@ -265,6 +271,8 @@ const DataVisualization: React.FC = () => {
           
           // Recalculate statistics
           const values = truncatedData.map(d => d.y);
+          if (!values.length) return chartData;
+          
           const min = Math.min(...values);
           const max = Math.max(...values);
           const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
@@ -293,17 +301,16 @@ const DataVisualization: React.FC = () => {
           
           // Update chart instance if it exists
           if (chartData.chart) {
-            // Clear existing datasets
-            while (chartData.chart.data.datasets.length > 1) {
-              chartData.chart.data.datasets.pop();
+            // Clear existing datasets first
+            if (chartData.chart.data.datasets.length > 1) {
+              chartData.chart.data.datasets.splice(1);
             }
             
-            // Update main data
+            // Update main dataset data
             chartData.chart.data.datasets[0].data = truncatedData;
             
             // Add forecast dataset if available
             if (forecast.length > 0 && (chartData.type === 'line' || chartData.type === 'bar')) {
-              // Add a dotted line showing the forecast
               chartData.chart.data.datasets.push({
                 label: `${chartData.key} (Forecast)`,
                 data: forecast,
@@ -311,14 +318,13 @@ const DataVisualization: React.FC = () => {
                 borderDash: [5, 5],
                 backgroundColor: 'transparent',
                 borderWidth: 2,
-                tension: 0.3,
                 pointRadius: 2,
-                pointBackgroundColor: chartData.color,
+                tension: 0.3,
                 fill: false
               });
             }
             
-            chartData.chart.update();
+            chartData.chart.update('none');
           }
           
           return {
@@ -362,6 +368,8 @@ const DataVisualization: React.FC = () => {
 
   // Get value from object by dot notation path
   const getValueByPath = (obj: any, path: string): any => {
+    if (!obj || !path) return undefined;
+    
     const parts = path.split('.');
     let current = obj;
     
@@ -482,436 +490,301 @@ const DataVisualization: React.FC = () => {
   
   // Generate insights based on data patterns
   const generateInsights = (chartData: ChartData): string[] => {
-    if (chartData.data.length < 5) return [];
+    if (!chartData.data.length || chartData.data.length < 5) return [];
     
     const insights: string[] = [];
-    const trend = detectTrend(chartData.data);
-    const volatility = calculateVolatility(chartData.data);
+    const trend = chartData.trend;
+    const volatility = chartData.volatility;
     
     // Time-weighted trend analysis (focus more on recent data)
     const recentData = chartData.data.slice(-5);
     const recentTrend = detectTrend(recentData);
     
     // Add trend insights with time context
-    if (recentTrend && recentTrend !== trend) {
-      insights.push(`Recent shift to ${recentTrend} trend detected.`);
-    } else if (trend === 'rising') {
-      insights.push(`Upward trend detected in ${chartData.key} values.`);
-    } else if (trend === 'falling') {
-      insights.push(`Downward trend detected in ${chartData.key} values.`);
-    } else if (trend === 'stable') {
-      insights.push(`${chartData.key} values appear stable.`);
-    }
-    
-    // Volatility insights
-    if (volatility === 'high') {
-      insights.push(`High variability observed in the data.`);
-    } else if (volatility === 'low' && chartData.data.length > 10) {
-      insights.push(`The values show consistent, predictable patterns.`);
-    }
-    
-    // Advanced anomaly detection
-    const yValues = chartData.data.map(d => d.y);
-    const mean = yValues.reduce((sum, val) => sum + val, 0) / yValues.length;
-    const stdDev = Math.sqrt(yValues.map(val => Math.pow(val - mean, 2)).reduce((sum, val) => sum + val, 0) / yValues.length);
-    
-    // Adaptive threshold based on data characteristics
-    const anomalyThreshold = calculateAnomalyThreshold(chartData.data);
-    
-    const lastValue = yValues[yValues.length - 1];
-    if (Math.abs(lastValue - mean) > anomalyThreshold * stdDev) {
-      insights.push(`Recent value may be an anomaly (outside ${anomalyThreshold.toFixed(1)}σ range).`);
-    }
-    
-    // Generate forecasting insight if trend is not stable
-    if (trend && trend !== 'stable' && chartData.data.length > 10) {
-      const forecast = generateForecast(chartData.data);
-      if (forecast.length > 0) {
-        const lastValue = chartData.data[chartData.data.length - 1].y;
-        const forecastEndValue = forecast[forecast.length - 1].y;
-        const changePercent = ((forecastEndValue - lastValue) / lastValue) * 100;
-        
-        insights.push(`Forecast: ${trend === 'rising' ? 'Increase' : 'Decrease'} of approximately ${Math.abs(changePercent).toFixed(1)}% expected.`);
+    if (trend) {
+      if (trend === 'rising') {
+        insights.push(`Upward trend detected.`);
+      } else if (trend === 'falling') {
+        insights.push(`Downward trend detected.`);
+      } else if (trend === 'stable') {
+        insights.push(`Stable trend with minimal variation.`);
       }
     }
     
-    return insights;
-  };
-
-  // Animation variants
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.3
+    // Add volatility insights
+    if (volatility) {
+      if (volatility === 'high') {
+        insights.push(`High volatility indicates unstable readings.`);
+      } else if (volatility === 'low') {
+        insights.push(`Low volatility indicates consistent readings.`);
       }
     }
+    
+    // Compare recent trend vs overall trend
+    if (trend && recentTrend && trend !== recentTrend) {
+      insights.push(`Recent change in trend direction.`);
+    }
+    
+    // Check for boundary conditions
+    if (chartData.min !== null && chartData.max !== null) {
+      const range = chartData.max - chartData.min;
+      const threshold = range * 0.1; // 10% of range
+      
+      if (chartData.last !== null) {
+        if (Math.abs(chartData.last - chartData.max) < threshold) {
+          insights.push(`Current value approaching upper range.`);
+        } else if (Math.abs(chartData.last - chartData.min) < threshold) {
+          insights.push(`Current value approaching lower range.`);
+        }
+      }
+    }
+    
+    // Return the top 3 most important insights to avoid overwhelming
+    return insights.slice(0, 3);
   };
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { 
-      opacity: 1, 
-      y: 0,
-      transition: { duration: 0.5 }
+  const getTrendIcon = (trend: string | null | undefined) => {
+    if (!trend) return null;
+    
+    switch (trend) {
+      case 'rising': return <span className="text-green-500">↗</span>;
+      case 'falling': return <span className="text-red-500">↘</span>;
+      case 'stable': return <span className="text-blue-500">→</span>;
+      default: return null;
     }
   };
 
-  // Render no data message if needed
+  // Add canvas ref to the refs map
+  const setCanvasRef = (id: string, canvas: HTMLCanvasElement | null) => {
+    chartRefs.current.set(id, canvas);
+  };
+
+  // Render no charts message if no data keys found
   if (dataKeys.length === 0) {
     return (
-      <motion.div 
-        className="glass-card neon-border rounded-lg shadow-xl p-6 mb-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <h2 className="font-heading text-xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-4">Data Visualization</h2>
-        <motion.div 
-          className="p-8 text-center text-gray-300"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3, duration: 0.6 }}
-        >
-          <motion.div 
-            className="w-24 h-24 mx-auto mb-6 rounded-full bg-gray-800/50 flex items-center justify-center"
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.7, type: "spring" }}
-          >
-            <i className="fas fa-chart-line text-4xl text-purple-400"></i>
-          </motion.div>
-          <motion.h3 
-            className="text-xl font-medium mb-3 text-blue-300"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7, duration: 0.5 }}
-          >
-            No Data Available
-          </motion.h3>
-          <motion.p 
-            className="text-gray-400"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8, duration: 0.5 }}
-          >
-            Connect to an MQTT broker and receive JSON messages with numeric values to visualize data.
-          </motion.p>
-        </motion.div>
-      </motion.div>
+      <div className="grid place-items-center mt-8 h-[300px] text-center">
+        <div className="max-w-md space-y-3">
+          <div className="text-5xl opacity-50 mx-auto">📊</div>
+          <h3 className="text-xl font-medium">No Data to Visualize</h3>
+          <p className="text-muted-foreground">
+            Connect to your MQTT broker and subscribe to topics containing numeric data to see visualizations. 
+            JSON messages with numeric fields will be automatically detected.
+          </p>
+        </div>
+      </div>
     );
   }
 
-  const isMobile = useMobile();
-
   return (
-    <motion.div 
-      className="glass-card neon-border rounded-lg shadow-xl p-4 sm:p-6 mb-6"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
-      <motion.div 
-        className="flex flex-col justify-between items-start mb-5"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.h2 
-          className="font-heading text-xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-3"
-          variants={itemVariants}
-        >
-          Data Visualization
-        </motion.h2>
-        
-        <motion.div 
-          className="w-full grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:flex md:flex-wrap gap-2 md:gap-3" 
-          variants={itemVariants}
-        >
-          <div className="flex items-center space-x-2 bg-gray-800/60 px-2 sm:px-3 py-2 rounded-md shadow-inner">
-            <Label className="text-xs sm:text-sm text-gray-300 whitespace-nowrap">Chart:</Label>
-            <Select value={chartType} onValueChange={handleChartTypeChange}>
-              <SelectTrigger className="bg-gray-800/80 border-gray-700 focus:border-purple-500 w-24 sm:w-32 text-xs sm:text-sm shadow-inner">
-                <SelectValue placeholder="Chart Type" />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700 text-xs sm:text-sm">
-                <SelectItem value="line" className="hover:bg-gray-700">Line</SelectItem>
-                <SelectItem value="bar" className="hover:bg-gray-700">Bar</SelectItem>
-                <SelectItem value="radar" className="hover:bg-gray-700">Radar</SelectItem>
-                <SelectItem value="pie" className="hover:bg-gray-700">Pie</SelectItem>
-                <SelectItem value="doughnut" className="hover:bg-gray-700">Doughnut</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="flex items-center space-x-2 bg-gray-800/60 px-2 sm:px-3 py-2 rounded-md shadow-inner">
-            <Label className="text-xs sm:text-sm text-gray-300 whitespace-nowrap">Color:</Label>
-            <div className="relative">
-              <Input 
-                type="color" 
-                value={chartColor} 
-                onChange={(e) => handleColorChange(e.target.value)}
-                className="bg-transparent h-6 sm:h-8 w-8 sm:w-10 rounded cursor-pointer p-0 border-none"
-              />
-              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-current rounded-full" style={{ color: chartColor }}></div>
-            </div>
-          </div>
-          
-          <ChartSettingsPanel />
-          
-          <ChartExportPanel chartRefs={chartRefs} />
-          
-          <Button
-            variant="destructive"
-            size="sm"
-            className={`bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 shadow-lg shadow-red-900/30 text-xs sm:text-sm ${isMobile ? 'w-full' : ''}`}
-            onClick={handleClearAllCharts}
-            disabled={charts.length === 0}
-          >
-            <i className="fas fa-trash-alt mr-1"></i> {isMobile ? 'Clear All' : 'Clear All Charts'}
-          </Button>
-        </motion.div>
-      </motion.div>
-      
-      {/* Data Key Selection */}
-      <motion.div 
-        className="glass-card bg-gray-900/70 rounded-lg p-3 sm:p-4 mb-5"
-        variants={itemVariants}
-      >
-        <h3 className="font-medium text-lg mb-2 sm:mb-3 text-blue-300">Select Data to Chart</h3>
-        
-        {/* Mobile-optimized key selection dropdown when on small screens */}
-        {isMobile && dataKeys.length > 6 && (
-          <div className="mb-3">
-            <Select 
-              onValueChange={(value) => {
-                const key = dataKeys.find(k => k.path === value);
-                if (key) {
-                  handleKeyToggle(key.path, !key.selected);
-                }
-              }}
-            >
-              <SelectTrigger className="w-full bg-gray-800/80 border-gray-700 text-sm">
-                <SelectValue placeholder="Quick select data key..." />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700 max-h-[300px]">
-                {dataKeys.map((key) => (
-                  <SelectItem key={key.path} value={key.path}>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${key.selected ? 'bg-purple-500' : 'bg-gray-600'}`}></div>
+    <div className="space-y-6">
+      {/* Control Panel */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xl flex items-center">
+            <span className="mr-2">Chart Controls</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Data keys selection */}
+            <div className="space-y-3">
+              <h3 className="font-medium">Available Data Points</h3>
+              <div className="h-[150px] overflow-y-auto bg-secondary/20 rounded-md p-2 border space-y-2">
+                {dataKeys.map((key, index) => (
+                  <div key={index} className="flex items-center space-x-2">
+                    <Checkbox 
+                      id={`key-${index}`}
+                      checked={key.selected}
+                      onCheckedChange={(checked) => handleKeyToggle(key.path, checked as boolean)}
+                    />
+                    <Label 
+                      htmlFor={`key-${index}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
                       {key.path}
-                    </div>
-                  </SelectItem>
+                    </Label>
+                  </div>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        
-        <div className="flex flex-wrap gap-2 sm:gap-3">
-          <AnimatePresence>
-            {dataKeys.map((key) => (
-              <motion.div 
-                key={key.path}
-                className={`flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1.5 rounded-full border text-xs sm:text-sm transition-all duration-300 ${
-                  key.selected 
-                    ? 'bg-purple-900/30 border-purple-500/50 shadow-[0_0_8px_rgba(168,85,247,0.4)]' 
-                    : 'bg-gray-800/60 border-gray-700/50'
-                }`}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Checkbox 
-                  id={`key-${key.path}`}
-                  checked={key.selected}
-                  onCheckedChange={(checked) => handleKeyToggle(key.path, checked === true)}
-                  className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${key.selected ? "text-purple-400" : ""}`}
-                />
-                <Label 
-                  htmlFor={`key-${key.path}`} 
-                  className="cursor-pointer text-xs sm:text-sm whitespace-nowrap"
+                {dataKeys.length === 0 && (
+                  <div className="text-sm text-muted-foreground p-2">
+                    No numeric data points detected yet.
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Chart type & color selection */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="chart-type">Chart Type</Label>
+                <Select value={chartType} onValueChange={handleChartTypeChange}>
+                  <SelectTrigger id="chart-type" className="w-full">
+                    <SelectValue placeholder="Select chart type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="line">Line Chart</SelectItem>
+                    <SelectItem value="bar">Bar Chart</SelectItem>
+                    <SelectItem value="radar">Radar Chart</SelectItem>
+                    <SelectItem value="polarArea">Polar Area</SelectItem>
+                    <SelectItem value="doughnut">Doughnut Chart</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="chart-color">Chart Color</Label>
+                <div className="grid grid-cols-5 gap-2">
+                  {['#8B5CF6', '#EC4899', '#3B82F6', '#10B981', '#F59E0B'].map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`h-8 rounded-md transition-all ${chartColor === color ? 'ring-2 ring-offset-2 ring-ring' : ''}`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => handleColorChange(color)}
+                      aria-label={`Set chart color to ${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            {/* Actions */}
+            <div className="space-y-2">
+              <h3 className="font-medium">Actions</h3>
+              <div className="grid grid-cols-1 gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowSettings(!showSettings)}
                 >
-                  {key.path}
-                </Label>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      </motion.div>
-      
-      {/* Charts Grid */}
-      <motion.div 
-        className="grid grid-cols-1 md:grid-cols-2 gap-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <AnimatePresence>
-          {charts.map((chartData) => (
-            <motion.div 
-              key={chartData.id} 
-              className="glass-card bg-gray-900/70 rounded-lg p-5 transition-all duration-300 hover:shadow-[0_0_15px_rgba(168,85,247,0.3)]"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.5 }}
-              layout
-            >
-              <div className="flex justify-between items-center mb-3">
-                <h4 className="font-medium text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">{chartData.key}</h4>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-red-400 hover:text-red-300 hover:bg-red-950/30 h-8 w-8 p-0 rounded-full"
-                  onClick={() => handleKeyToggle(chartData.key, false)}
+                  <span className="mr-2">Chart Settings</span>
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowExport(!showExport)}
                 >
-                  <i className="fas fa-times"></i>
+                  <span className="mr-2">Export Options</span>
+                </Button>
+                <Button 
+                  variant="destructive"
+                  onClick={handleClearAllCharts}
+                  disabled={charts.length === 0}
+                >
+                  <span className="mr-2">Clear All Charts</span>
                 </Button>
               </div>
-              
-              {/* Chart Canvas */}
-              <div className="bg-gray-800/60 rounded-lg h-60 mb-3 p-3 shadow-inner border border-gray-700/50">
-                <canvas 
-                  ref={(el) => {
-                    chartRefs.current.set(chartData.id, el);
-                  }}
-                />
-              </div>
-              
-              {/* Statistics */}
-              <div className="grid grid-cols-4 gap-3 text-center text-sm mb-3">
-                <div className="bg-gray-800/70 rounded-lg p-2 border border-gray-700/30">
-                  <div className="text-gray-400 mb-1">Min</div>
-                  <div className="font-mono text-blue-300">{formatNumber(chartData.min)}</div>
-                </div>
-                <div className="bg-gray-800/70 rounded-lg p-2 border border-gray-700/30">
-                  <div className="text-gray-400 mb-1">Max</div>
-                  <div className="font-mono text-purple-300">{formatNumber(chartData.max)}</div>
-                </div>
-                <div className="bg-gray-800/70 rounded-lg p-2 border border-gray-700/30">
-                  <div className="text-gray-400 mb-1">Avg</div>
-                  <div className="font-mono text-teal-300">{formatNumber(chartData.avg)}</div>
-                </div>
-                <div className="bg-gray-800/70 rounded-lg p-2 border border-gray-700/30">
-                  <div className="text-gray-400 mb-1">Last</div>
-                  <div className="font-mono text-amber-300">{formatNumber(chartData.last)}</div>
-                </div>
-              </div>
-              
-              {/* Data Insights */}
-              {chartData.insights && chartData.insights.length > 0 && (
-                <motion.div 
-                  className="bg-gray-800/50 rounded-lg p-3 border border-indigo-500/20 mb-2"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="text-indigo-400 text-lg">
-                      <i className="fas fa-lightbulb"></i>
-                    </div>
-                    <h5 className="text-indigo-300 font-medium">Data Insights</h5>
-                  </div>
-                  
-                  <div className="space-y-2 text-sm">
-                    {chartData.trend && (
-                      <div className="flex items-center gap-2">
-                        <div className={`text-sm ${
-                          chartData.trend === 'rising' ? 'text-green-400' : 
-                          chartData.trend === 'falling' ? 'text-red-400' : 'text-blue-400'
-                        }`}>
-                          <i className={`fas ${
-                            chartData.trend === 'rising' ? 'fa-arrow-up' : 
-                            chartData.trend === 'falling' ? 'fa-arrow-down' : 'fa-equals'
-                          }`}></i>
-                        </div>
-                        <div className="text-gray-300">
-                          Trend: <span className={
-                            chartData.trend === 'rising' ? 'text-green-400' : 
-                            chartData.trend === 'falling' ? 'text-red-400' : 'text-blue-400'
-                          }>{chartData.trend}</span>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {chartData.volatility && (
-                      <div className="flex items-center gap-2">
-                        <div className={`text-sm ${
-                          chartData.volatility === 'high' ? 'text-orange-400' : 
-                          chartData.volatility === 'medium' ? 'text-yellow-400' : 'text-green-400'
-                        }`}>
-                          <i className={`fas ${
-                            chartData.volatility === 'high' ? 'fa-bolt' : 
-                            chartData.volatility === 'medium' ? 'fa-chart-line' : 'fa-grip-lines'
-                          }`}></i>
-                        </div>
-                        <div className="text-gray-300">
-                          Volatility: <span className={
-                            chartData.volatility === 'high' ? 'text-orange-400' : 
-                            chartData.volatility === 'medium' ? 'text-yellow-400' : 'text-green-400'
-                          }>{chartData.volatility}</span>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {chartData.anomalyThreshold && (
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm text-purple-400">
-                          <i className="fas fa-filter"></i>
-                        </div>
-                        <div className="text-gray-300">
-                          Anomaly Threshold: <span className="text-purple-400">{chartData.anomalyThreshold.toFixed(1)}σ</span>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {chartData.forecast && chartData.forecast.length > 0 && (
-                      <div className="flex items-center gap-2">
-                        <div className="text-sm text-blue-400">
-                          <i className="fas fa-magic"></i>
-                        </div>
-                        <div className="text-gray-300">
-                          Forecast: <span className="text-blue-400">Next {chartData.forecast.length} points</span>
-                        </div>
-                      </div>
-                    )}
-                    
-                    <ul className="list-disc list-inside text-gray-300 text-xs space-y-1 mt-1">
-                      {chartData.insights.map((insight, index) => (
-                        <li key={index}>{insight}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </motion.div>
-              )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        
-        {charts.length === 0 && (
-          <motion.div 
-            className="md:col-span-2 p-8 text-center text-gray-300 glass-card bg-gray-900/50 rounded-lg border border-gray-700/30"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Show settings panel if open */}
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
           >
-            <motion.div 
-              className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center"
-              initial={{ scale: 0.8 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 200 }}
-            >
-              <i className="fas fa-chart-bar text-2xl text-indigo-400"></i>
-            </motion.div>
-            <h3 className="text-lg font-medium mb-2 text-blue-300">No Charts Selected</h3>
-            <p className="text-gray-400">Select data points from the checkboxes above to create charts.</p>
+            <ChartSettingsPanel onClose={() => setShowSettings(false)} />
           </motion.div>
         )}
-      </motion.div>
-    </motion.div>
+      </AnimatePresence>
+      
+      {/* Show export panel if open */}
+      <AnimatePresence>
+        {showExport && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+          >
+            <ChartExportPanel 
+              charts={charts} 
+              onClose={() => setShowExport(false)} 
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* Charts grid */}
+      <div className={`grid ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'} gap-6`}>
+        {charts.map((chartData) => (
+          <Card key={chartData.id} className="overflow-hidden">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center justify-between">
+                <div className="flex items-center">
+                  <span 
+                    className="w-3 h-3 rounded-full mr-2" 
+                    style={{ backgroundColor: chartData.color }}
+                  ></span>
+                  {chartData.key}
+                  {chartData.trend && (
+                    <span className="ml-2">{getTrendIcon(chartData.trend)}</span>
+                  )}
+                </div>
+                <span className="text-sm font-normal">
+                  {chartData.last !== null ? formatNumber(chartData.last) : 'N/A'}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 pb-1">
+              <div className="h-[240px] px-4 pt-2">
+                <canvas 
+                  ref={(canvas) => setCanvasRef(chartData.id, canvas)} 
+                  height="240"
+                ></canvas>
+              </div>
+              
+              {/* Stats and insights */}
+              <div className="px-4 py-2 flex flex-wrap text-xs text-muted-foreground gap-x-4 gap-y-1 border-t mt-2">
+                <div>Min: {formatNumber(chartData.min)}</div>
+                <div>Max: {formatNumber(chartData.max)}</div>
+                <div>Avg: {formatNumber(chartData.avg)}</div>
+                
+                {chartData.volatility && (
+                  <div>
+                    Volatility: 
+                    <span className={`ml-1 ${
+                      chartData.volatility === 'high' ? 'text-red-400' :
+                      chartData.volatility === 'low' ? 'text-green-400' :
+                      'text-yellow-400'
+                    }`}>
+                      {chartData.volatility}
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Insights section */}
+              {chartData.insights && chartData.insights.length > 0 && (
+                <div className="px-4 py-2 bg-accent/20 text-xs border-t">
+                  <div className="font-medium mb-1">Insights:</div>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {chartData.insights.map((insight, idx) => (
+                      <li key={idx}>{insight}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+        
+        {/* No charts selected state */}
+        {dataKeys.length > 0 && charts.length === 0 && (
+          <div className="col-span-1 lg:col-span-2 bg-card p-8 rounded-lg border text-center">
+            <div className="max-w-md mx-auto space-y-3">
+              <h3 className="text-lg font-medium">No Charts Selected</h3>
+              <p className="text-muted-foreground">
+                Select data points from the list above to create charts and visualize your MQTT data.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
