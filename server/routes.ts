@@ -1,9 +1,10 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer } from "ws";
 import WebSocket from "ws";
 import * as mqtt from 'mqtt';
 import { PacketCallback } from 'mqtt';
+import { generateMqttInsights, generateMqttRecommendations, analyzeMqttTopicPattern, AiInsight } from './openai-service';
 
 interface MqttClientConnection {
   client: mqtt.MqttClient;
@@ -353,6 +354,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mqtt: mqttConnections.size
       }
     });
+  });
+  
+  // AI Insights API endpoints
+  
+  // Type for the message data sent to AI analysis
+  interface MessageForAnalysis {
+    id: string;
+    topic: string;
+    payload: string;
+    timestamp: number;
+    retain?: boolean;
+    qos?: number;
+    isSys?: boolean;
+  }
+  
+  // Generate AI insights from MQTT messages
+  app.post('/api/insights/analyze', async (req: Request, res: Response) => {
+    try {
+      const messages: MessageForAnalysis[] = req.body.messages || [];
+      
+      if (messages.length === 0) {
+        return res.json({
+          insights: [{
+            type: 'info',
+            message: 'No messages provided for analysis. Subscribe to topics and collect some messages first.'
+          }]
+        });
+      }
+      
+      console.log(`Analyzing ${messages.length} messages with AI...`);
+      const insights = await generateMqttInsights(messages);
+      
+      return res.json({ insights });
+    } catch (error: any) {
+      console.error('Error generating AI insights:', error);
+      return res.status(500).json({
+        error: 'Failed to generate AI insights',
+        message: error.message
+      });
+    }
+  });
+  
+  // Get recommendations for MQTT system optimization
+  app.post('/api/insights/recommendations', async (req: Request, res: Response) => {
+    try {
+      const messages: MessageForAnalysis[] = req.body.messages || [];
+      
+      if (messages.length === 0) {
+        return res.json({
+          recommendations: ['Start by connecting to an MQTT broker and subscribing to topics to collect data.']
+        });
+      }
+      
+      console.log(`Generating recommendations based on ${messages.length} messages...`);
+      const recommendations = await generateMqttRecommendations(messages);
+      
+      return res.json({ recommendations });
+    } catch (error: any) {
+      console.error('Error generating recommendations:', error);
+      return res.status(500).json({
+        error: 'Failed to generate recommendations',
+        message: error.message
+      });
+    }
+  });
+  
+  // Analyze MQTT topic patterns
+  app.post('/api/insights/topics', async (req: Request, res: Response) => {
+    try {
+      const topics: string[] = req.body.topics || [];
+      
+      if (topics.length === 0) {
+        return res.json({
+          analysis: 'No topics provided for analysis. Subscribe to some topics first.'
+        });
+      }
+      
+      console.log(`Analyzing ${topics.length} topic patterns...`);
+      const analysis = await analyzeMqttTopicPattern(topics);
+      
+      return res.json({ analysis });
+    } catch (error: any) {
+      console.error('Error analyzing topic patterns:', error);
+      return res.status(500).json({
+        error: 'Failed to analyze topic patterns',
+        message: error.message
+      });
+    }
   });
 
   return httpServer;

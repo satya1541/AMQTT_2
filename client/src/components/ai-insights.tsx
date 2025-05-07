@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMqtt } from '@/hooks/use-mqtt';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card } from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 interface Insight {
   type: 'success' | 'warning' | 'info';
@@ -10,179 +14,101 @@ interface Insight {
 
 const AiInsights: React.FC = () => {
   const { messages } = useMqtt();
+  const { toast } = useToast();
   const [insights, setInsights] = useState<Insight[]>([]);
+  const [recommendations, setRecommendations] = useState<string[]>([]);
+  const [topicAnalysis, setTopicAnalysis] = useState<string>('');
   const [lastAnalyzedTime, setLastAnalyzedTime] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   
-  // Automatically analyze the latest message when new messages arrive
-  useEffect(() => {
-    if (messages.length > 0) {
-      const latestMessage = messages[messages.length - 1];
-      if (!latestMessage.isSys) {
-        analyzeMessage(latestMessage.payload);
-        setLastAnalyzedTime(new Date(latestMessage.timestamp).toLocaleString());
+  // Get current topics
+  const getUniqueTopics = (): string[] => {
+    const topics = new Set<string>();
+    messages.forEach(msg => {
+      if (!msg.isSys) {
+        topics.add(msg.topic);
       }
-    }
-  }, [messages]);
-  
-  // Run analysis on the latest stored message
-  const runAnalysis = () => {
-    if (messages.length > 0) {
-      // Find the latest non-$SYS message
-      const nonSysMessages = messages.filter(msg => !msg.isSys);
-      if (nonSysMessages.length > 0) {
-        const latestMessage = nonSysMessages[nonSysMessages.length - 1];
-        analyzeMessage(latestMessage.payload);
-        setLastAnalyzedTime(new Date(latestMessage.timestamp).toLocaleString());
-      }
-    }
+    });
+    return Array.from(topics);
   };
   
-  // Analyze message content for insights
-  const analyzeMessage = (payload: string) => {
-    try {
-      // Try to parse JSON
-      const data = JSON.parse(payload);
-      const newInsights: Insight[] = [];
-      
-      // Count keys (complexity analysis)
-      const keyCount = countKeysInObject(data);
-      if (keyCount > 10) {
-        newInsights.push({
-          type: 'info',
-          message: `Complex message with ${keyCount} data points detected.`
-        });
-      }
-      
-      // Check for status fields
-      if (data.status) {
-        if (data.status === 'error' || (data.metrics && data.metrics.status === 'error')) {
-          newInsights.push({
-            type: 'warning',
-            message: 'Device is reporting an error status.'
-          });
-        } else if (data.status === 'warn' || (data.metrics && data.metrics.status === 'warning')) {
-          newInsights.push({
-            type: 'warning',
-            message: 'Device is reporting a warning status.'
-          });
-        } else if (data.status === 'normal' || (data.metrics && data.metrics.status === 'normal')) {
-          newInsights.push({
-            type: 'success',
-            message: 'Device is operating normally.'
-          });
-        }
-      }
-      
-      // Temperature analysis
-      if (data.temp || (data.metrics && data.metrics.temp)) {
-        const temp = data.temp || data.metrics.temp;
-        if (typeof temp === 'number') {
-          if (temp > 30) {
-            newInsights.push({
-              type: 'warning',
-              message: `High temperature (${temp}°C) detected.`
-            });
-          } else if (temp < 0) {
-            newInsights.push({
-              type: 'warning',
-              message: `Low temperature (${temp}°C) detected.`
-            });
-          } else {
-            newInsights.push({
-              type: 'success',
-              message: `Temperature (${temp}°C) is within normal range.`
-            });
-          }
-        }
-      }
-      
-      // Humidity analysis
-      if (data.humid || (data.metrics && data.metrics.humid)) {
-        const humid = data.humid || data.metrics.humid;
-        if (typeof humid === 'number') {
-          if (humid > 80) {
-            newInsights.push({
-              type: 'warning',
-              message: `High humidity (${humid}%) detected.`
-            });
-          } else if (humid < 20) {
-            newInsights.push({
-              type: 'warning',
-              message: `Low humidity (${humid}%) detected.`
-            });
-          } else {
-            newInsights.push({
-              type: 'success',
-              message: `Humidity level (${humid}%) is optimal.`
-            });
-          }
-        }
-      }
-      
-      // Device ID detection
-      if (data.device || data.deviceId || data.id) {
-        const deviceId = data.device || data.deviceId || data.id;
-        newInsights.push({
-          type: 'info',
-          message: `Data from device '${deviceId}'.`
-        });
-      }
-      
-      // Timestamp analysis
-      if (data.timestamp) {
-        const msgTime = new Date(
-          typeof data.timestamp === 'number' && data.timestamp > 10000000000 
-            ? data.timestamp // milliseconds
-            : data.timestamp * 1000 // seconds to milliseconds
-        );
-        
-        if (!isNaN(msgTime.getTime())) {
-          const timeDiff = Math.abs(new Date().getTime() - msgTime.getTime()) / 1000;
-          if (timeDiff > 3600) {
-            newInsights.push({
-              type: 'warning',
-              message: `Message timestamp is ${Math.floor(timeDiff / 60)} minutes old.`
-            });
-          } else {
-            newInsights.push({
-              type: 'info',
-              message: `Message timestamp is recent (${Math.floor(timeDiff)} seconds ago).`
-            });
-          }
-        }
-      }
-      
-      // If no specific insights were generated, add a generic one
-      if (newInsights.length === 0) {
-        newInsights.push({
-          type: 'info',
-          message: 'No specific patterns detected in the message data.'
-        });
-      }
-      
-      setInsights(newInsights);
-      
-    } catch (error) {
-      // Not valid JSON
-      setInsights([
-        {
-          type: 'warning',
-          message: 'Message is not in JSON format, unable to analyze.'
-        }
-      ]);
-    }
+  // Filter out system messages and get the relevant set for analysis
+  const getMessagesForAnalysis = () => {
+    // Only use the last 50 non-system messages for analysis to avoid too much data
+    return messages
+      .filter(msg => !msg.isSys)
+      .slice(-100);
   };
   
-  // Count total keys in a nested object
-  const countKeysInObject = (obj: any, count = 0): number => {
-    if (!obj || typeof obj !== 'object') return count;
+  // Run AI analysis to get insights
+  const runAiAnalysis = async () => {
+    const messagesToAnalyze = getMessagesForAnalysis();
     
-    return Object.keys(obj).reduce((acc, key) => {
-      if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
-        return countKeysInObject(obj[key], acc + 1);
+    if (messagesToAnalyze.length === 0) {
+      toast({
+        title: "No messages to analyze",
+        description: "Connect to a broker and receive some messages first.",
+        variant: "warning"
+      });
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Get AI insights
+      const insightsResponse = await apiRequest('/api/insights/analyze', {
+        method: 'POST',
+        body: JSON.stringify({ messages: messagesToAnalyze }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (insightsResponse.insights) {
+        setInsights(insightsResponse.insights);
       }
-      return acc + 1;
-    }, count);
+      
+      // Get AI recommendations
+      const recommendationsResponse = await apiRequest('/api/insights/recommendations', {
+        method: 'POST',
+        body: JSON.stringify({ messages: messagesToAnalyze }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (recommendationsResponse.recommendations) {
+        setRecommendations(recommendationsResponse.recommendations);
+      }
+      
+      // Get topic pattern analysis
+      const topics = getUniqueTopics();
+      if (topics.length > 0) {
+        const topicResponse = await apiRequest('/api/insights/topics', {
+          method: 'POST',
+          body: JSON.stringify({ topics }),
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (topicResponse.analysis) {
+          setTopicAnalysis(topicResponse.analysis);
+        }
+      }
+      
+      setLastAnalyzedTime(new Date().toLocaleString());
+      
+      toast({
+        title: "AI Analysis Complete",
+        description: "Analysis of your MQTT data has been successfully completed.",
+        variant: "success"
+      });
+    } catch (error) {
+      console.error('Error running AI analysis:', error);
+      toast({
+        title: "Analysis Failed",
+        description: "There was an error analyzing your data. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   // Icon mapping for insight types
@@ -197,48 +123,134 @@ const AiInsights: React.FC = () => {
   
   return (
     <div className="bg-gray-800 rounded-lg shadow-xl p-4 h-full">
-      <h2 className="font-heading text-xl mb-4 text-blue-400">AI Insights</h2>
+      <h2 className="font-heading text-xl mb-4 text-blue-400 flex items-center">
+        <i className="fas fa-brain mr-2"></i> AI Insights
+      </h2>
       
-      <div className="space-y-4">
-        <div className="bg-gray-900 rounded-lg p-4">
-          <h3 className="text-purple-400 font-medium mb-2 flex items-center">
-            <i className="fas fa-brain mr-2"></i> Latest Analysis
-          </h3>
-          <div className="space-y-3 text-sm">
-            {lastAnalyzedTime ? (
-              <p>Analysis of message received at <span className="text-gray-400">{lastAnalyzedTime}</span></p>
-            ) : (
-              <p>No messages analyzed yet</p>
-            )}
-            
-            <ScrollArea className="h-40">
-              <div className="bg-gray-800 p-3 rounded space-y-2">
-                {insights.length > 0 ? (
-                  insights.map((insight, index) => (
-                    <div key={index} className="flex items-start">
-                      <div className="mr-2">{getInsightIcon(insight.type)}</div>
-                      <div>{insight.message}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-gray-400 text-center py-4">
-                    <i className="fas fa-search mb-2 text-lg"></i>
-                    <p>No data to analyze yet.</p>
-                    <p>Connect to a broker and receive messages to generate insights.</p>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-          </div>
+      {lastAnalyzedTime && (
+        <div className="text-xs text-gray-400 mb-3">
+          Last analyzed: {lastAnalyzedTime}
         </div>
+      )}
+      
+      <Tabs defaultValue="insights" className="w-full">
+        <TabsList className="w-full mb-4 bg-gray-900 p-1 rounded-md">
+          <TabsTrigger value="insights" className="flex-1 data-[state=active]:bg-gray-700">
+            <i className="fas fa-lightbulb mr-2"></i> Insights
+          </TabsTrigger>
+          <TabsTrigger value="recommendations" className="flex-1 data-[state=active]:bg-gray-700">
+            <i className="fas fa-check-square mr-2"></i> Recommendations
+          </TabsTrigger>
+          <TabsTrigger value="topics" className="flex-1 data-[state=active]:bg-gray-700">
+            <i className="fas fa-project-diagram mr-2"></i> Topics
+          </TabsTrigger>
+        </TabsList>
         
+        <TabsContent value="insights" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+          <Card className="bg-gray-900 border-gray-700">
+            <ScrollArea className="h-[240px] p-4">
+              {insights.length > 0 ? (
+                <div className="space-y-3">
+                  {insights.map((insight, index) => (
+                    <div key={index} className={`p-3 rounded-md flex items-start ${
+                      insight.type === 'success' ? 'bg-green-900/30 border-l-2 border-green-400' :
+                      insight.type === 'warning' ? 'bg-yellow-900/30 border-l-2 border-yellow-400' :
+                      'bg-blue-900/30 border-l-2 border-blue-400'
+                    }`}>
+                      <div className="mr-2 mt-0.5">{getInsightIcon(insight.type)}</div>
+                      <div className="text-sm">{insight.message}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-gray-400 text-center py-8 px-2">
+                  <i className="fas fa-search mb-2 text-2xl"></i>
+                  <p className="mb-2">No data has been analyzed yet.</p>
+                  <p>Click the "Run AI Analysis" button below to analyze your MQTT messages.</p>
+                </div>
+              )}
+            </ScrollArea>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="recommendations" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+          <Card className="bg-gray-900 border-gray-700">
+            <ScrollArea className="h-[240px] p-4">
+              {recommendations.length > 0 ? (
+                <div className="space-y-3">
+                  {recommendations.map((recommendation, index) => (
+                    <div key={index} className="p-3 bg-indigo-900/20 rounded-md border-l-2 border-indigo-400">
+                      <div className="flex items-start">
+                        <i className="fas fa-thumbs-up text-indigo-400 mr-2 mt-1"></i>
+                        <div className="text-sm">{recommendation}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-gray-400 text-center py-8 px-2">
+                  <i className="fas fa-clipboard-check mb-2 text-2xl"></i>
+                  <p className="mb-2">No recommendations available yet.</p>
+                  <p>Run an analysis to get optimization suggestions for your MQTT setup.</p>
+                </div>
+              )}
+            </ScrollArea>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="topics" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+          <Card className="bg-gray-900 border-gray-700">
+            <ScrollArea className="h-[240px] p-4">
+              {topicAnalysis ? (
+                <div className="p-4 bg-purple-900/20 rounded-md">
+                  <h4 className="text-purple-400 mb-2 flex items-center">
+                    <i className="fas fa-sitemap mr-2"></i> Topic Structure Analysis
+                  </h4>
+                  <p className="text-sm whitespace-pre-line">{topicAnalysis}</p>
+                  
+                  <div className="mt-4 pt-3 border-t border-gray-700">
+                    <h5 className="text-sm font-medium text-gray-300 mb-2">Current Topics:</h5>
+                    <div className="grid grid-cols-1 gap-2">
+                      {getUniqueTopics().map((topic, index) => (
+                        <div key={index} className="text-xs bg-gray-800 p-2 rounded-md">
+                          <code>{topic}</code>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-gray-400 text-center py-8 px-2">
+                  <i className="fas fa-project-diagram mb-2 text-2xl"></i>
+                  <p className="mb-2">No topic analysis available yet.</p>
+                  <p>Run an analysis to get insights about your MQTT topic structure.</p>
+                </div>
+              )}
+            </ScrollArea>
+          </Card>
+        </TabsContent>
+      </Tabs>
+      
+      <div className="mt-4">
         <Button
           className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white"
-          onClick={runAnalysis}
-          disabled={messages.length === 0}
+          onClick={runAiAnalysis}
+          disabled={messages.length === 0 || isLoading}
         >
-          <i className="fas fa-sync-alt mr-2"></i> Run Analysis on Latest Data
+          {isLoading ? (
+            <>
+              <i className="fas fa-spinner fa-spin mr-2"></i> Analyzing Data...
+            </>
+          ) : (
+            <>
+              <i className="fas fa-brain mr-2"></i> Run AI Analysis
+            </>
+          )}
         </Button>
+        
+        <div className="mt-3 text-xs text-center text-gray-500">
+          <p>Analysis will use up to 100 of your most recent non-system messages.</p>
+        </div>
       </div>
     </div>
   );
