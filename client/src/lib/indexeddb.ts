@@ -1,360 +1,411 @@
+/**
+ * IndexedDB Utility Module
+ * This module provides utilities for storing and retrieving data from IndexedDB
+ */
+
 import { MqttMessage } from '@/hooks/use-mqtt';
 
-// IndexedDB setup
-const DB_NAME = 'mqtt-explorer';
-const DB_VERSION = 2; // Increased to add new indexes
-const MESSAGES_STORE = 'messages';
-const ANALYTICS_STORE = 'analytics';
-const PUBLISH_QUEUE_STORE = 'publish_queue';
+const DB_NAME = 'mqtt-explorer-db';
+const DB_VERSION = 1;
+const MESSAGES_STORE = 'mqtt-messages';
+const ANALYTICS_STORE = 'analytics-events';
+const PENDING_SYNC_STORE = 'pending-sync';
 
-// Extended MqttMessage interface with sync properties
-export interface ExtendedMqttMessage extends MqttMessage {
-  pendingSync?: boolean;
-  pendingServerSync?: boolean;
-  syncAttempts?: number;
-  syncError?: string;
-  lastSyncAttempt?: number;
-}
-
-// Analytics event interface
-export interface AnalyticsEvent {
-  id: string;
-  type: string;
-  data: any;
-  timestamp: number;
-  synced?: boolean;
-}
-
-function openDatabase(): Promise<IDBDatabase> {
+/**
+ * Initialize the database
+ * @returns Promise that resolves with the database
+ */
+export async function initializeDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
-
+    
     request.onerror = (event) => {
-      reject('Error opening IndexedDB: ' + (event.target as IDBOpenDBRequest).error);
+      console.error('Error opening database:', event);
+      reject('Error opening database');
     };
-
+    
     request.onsuccess = (event) => {
-      resolve((event.target as IDBOpenDBRequest).result);
+      const db = (event.target as IDBOpenDBRequest).result;
+      console.log('Database opened successfully');
+      resolve(db);
     };
-
+    
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      const oldVersion = event.oldVersion;
       
-      if (oldVersion < 1) {
-        // Create messages store with indexes if it doesn't exist
-        if (!db.objectStoreNames.contains(MESSAGES_STORE)) {
-          const store = db.createObjectStore(MESSAGES_STORE, { keyPath: 'id' });
-          store.createIndex('timestamp', 'timestamp', { unique: false });
-          store.createIndex('topic', 'topic', { unique: false });
-        }
+      // Create message store with id as key path
+      if (!db.objectStoreNames.contains(MESSAGES_STORE)) {
+        const messageStore = db.createObjectStore(MESSAGES_STORE, { keyPath: 'id' });
+        messageStore.createIndex('topic', 'topic', { unique: false });
+        messageStore.createIndex('timestamp', 'timestamp', { unique: false });
+        messageStore.createIndex('pendingSync', 'pendingSync', { unique: false });
+        console.log('Message store created');
       }
       
-      if (oldVersion < 2) {
-        // Add new indexes for v2
-        if (db.objectStoreNames.contains(MESSAGES_STORE)) {
-          const store = request.transaction!.objectStore(MESSAGES_STORE);
-          
-          // Add new indexes if they don't exist
-          if (!store.indexNames.contains('pendingSync')) {
-            store.createIndex('pendingSync', 'pendingSync', { unique: false });
-          }
-          
-          if (!store.indexNames.contains('pendingServerSync')) {
-            store.createIndex('pendingServerSync', 'pendingServerSync', { unique: false });
-          }
-        }
-        
-        // Create analytics store
-        if (!db.objectStoreNames.contains(ANALYTICS_STORE)) {
-          const store = db.createObjectStore(ANALYTICS_STORE, { keyPath: 'id' });
-          store.createIndex('timestamp', 'timestamp', { unique: false });
-          store.createIndex('synced', 'synced', { unique: false });
-          store.createIndex('type', 'type', { unique: false });
-        }
-        
-        // Create publish queue store
-        if (!db.objectStoreNames.contains(PUBLISH_QUEUE_STORE)) {
-          const store = db.createObjectStore(PUBLISH_QUEUE_STORE, { keyPath: 'id' });
-          store.createIndex('timestamp', 'timestamp', { unique: false });
-          store.createIndex('processed', 'processed', { unique: false });
-        }
+      // Create analytics store with id as key path
+      if (!db.objectStoreNames.contains(ANALYTICS_STORE)) {
+        const analyticsStore = db.createObjectStore(ANALYTICS_STORE, { keyPath: 'id' });
+        analyticsStore.createIndex('eventType', 'eventType', { unique: false });
+        analyticsStore.createIndex('timestamp', 'timestamp', { unique: false });
+        analyticsStore.createIndex('synced', 'synced', { unique: false });
+        console.log('Analytics store created');
+      }
+      
+      // Create pending sync store with id as key path
+      if (!db.objectStoreNames.contains(PENDING_SYNC_STORE)) {
+        const pendingSyncStore = db.createObjectStore(PENDING_SYNC_STORE, { keyPath: 'id' });
+        pendingSyncStore.createIndex('timestamp', 'timestamp', { unique: false });
+        pendingSyncStore.createIndex('attempts', 'attempts', { unique: false });
+        console.log('Pending sync store created');
       }
     };
   });
 }
 
-export async function storeMessage(message: ExtendedMqttMessage): Promise<void> {
+/**
+ * Store a message in IndexedDB
+ * @param message MQTT message to store
+ * @returns Promise that resolves when the message is stored
+ */
+export async function storeMessage(message: MqttMessage): Promise<void> {
   try {
-    const db = await openDatabase();
-    const transaction = db.transaction([MESSAGES_STORE], 'readwrite');
-    const store = transaction.objectStore(MESSAGES_STORE);
-    
-    // Check if the message already exists (updating)
-    const getRequest = store.get(message.id);
+    const db = await initializeDatabase();
     
     return new Promise((resolve, reject) => {
-      getRequest.onsuccess = () => {
-        const existingMessage = getRequest.result;
-        
-        if (existingMessage) {
-          // Update existing message
-          store.put(message);
-        } else {
-          // Add new message
-          store.add(message);
-        }
-        
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
+      const transaction = db.transaction(MESSAGES_STORE, 'readwrite');
+      const store = transaction.objectStore(MESSAGES_STORE);
+      
+      const request = store.put(message);
+      
+      request.onsuccess = () => {
+        resolve();
       };
       
-      getRequest.onerror = () => reject(getRequest.error);
+      request.onerror = (event) => {
+        console.error('Error storing message:', event);
+        reject('Error storing message');
+      };
+      
+      transaction.oncomplete = () => {
+        db.close();
+      };
     });
   } catch (error) {
-    console.error('Error storing message in IndexedDB:', error);
+    console.error('Error storing message:', error);
     throw error;
   }
 }
 
-export interface MessageFilterOptions {
-  startTime?: number;
-  endTime?: number;
+interface MessageFilters {
   topic?: string;
-  payloadContains?: string;
-  limit?: number;
-  offset?: number;
   pendingSync?: boolean;
   pendingServerSync?: boolean;
+  startTimestamp?: number;
+  endTimestamp?: number;
 }
 
-export async function getMessages(options: MessageFilterOptions = {}): Promise<ExtendedMqttMessage[]> {
+/**
+ * Get messages from IndexedDB with optional filters
+ * @param filters Optional filters for messages (topic, pendingSync, pendingServerSync, etc.)
+ * @param limit Maximum number of messages to retrieve
+ * @returns Promise that resolves with the messages
+ */
+export async function getMessages(
+  filters: MessageFilters = {},
+  limit: number = 1000
+): Promise<MqttMessage[]> {
   try {
-    const db = await openDatabase();
-    const transaction = db.transaction([MESSAGES_STORE], 'readonly');
-    const store = transaction.objectStore(MESSAGES_STORE);
-    
-    // Determine which index to use based on filter options
-    let cursorRequest: IDBRequest<IDBCursorWithValue | null>;
-    
-    if (options.pendingSync === true) {
-      // Use pendingSync index if we're filtering for pending sync messages
-      const index = store.index('pendingSync');
-      cursorRequest = index.openCursor(IDBKeyRange.only(true));
-    } else if (options.pendingServerSync === true) {
-      // Use pendingServerSync index if we're filtering for pending server sync
-      const index = store.index('pendingServerSync');
-      cursorRequest = index.openCursor(IDBKeyRange.only(true));
-    } else {
-      // Use timestamp index for all other queries
-      const index = store.index('timestamp');
-      
-      if (options.startTime && options.endTime) {
-        const range = IDBKeyRange.bound(options.startTime, options.endTime);
-        cursorRequest = index.openCursor(range);
-      } else if (options.startTime) {
-        const range = IDBKeyRange.lowerBound(options.startTime);
-        cursorRequest = index.openCursor(range);
-      } else if (options.endTime) {
-        const range = IDBKeyRange.upperBound(options.endTime);
-        cursorRequest = index.openCursor(range);
-      } else {
-        cursorRequest = index.openCursor();
-      }
-    }
+    const db = await initializeDatabase();
     
     return new Promise((resolve, reject) => {
-      const messages: ExtendedMqttMessage[] = [];
-      let skipped = 0;
-      const offset = options.offset || 0;
-      const limit = options.limit || Number.MAX_SAFE_INTEGER;
+      const transaction = db.transaction(MESSAGES_STORE, 'readonly');
+      const store = transaction.objectStore(MESSAGES_STORE);
       
-      cursorRequest.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+      // Use index if filtering by topic or pendingSync
+      let request: IDBRequest;
+      if (filters.pendingSync !== undefined) {
+        const index = store.index('pendingSync');
+        request = index.getAll(IDBKeyRange.only(filters.pendingSync), limit);
+      } else if (filters.topic) {
+        const index = store.index('topic');
+        request = index.getAll(IDBKeyRange.only(filters.topic), limit);
+      } else if (filters.startTimestamp && filters.endTimestamp) {
+        const index = store.index('timestamp');
+        request = index.getAll(IDBKeyRange.bound(filters.startTimestamp, filters.endTimestamp), limit);
+      } else {
+        request = store.getAll(null, limit);
+      }
+      
+      request.onsuccess = () => {
+        let messages = request.result;
         
-        if (cursor) {
-          const message = cursor.value as ExtendedMqttMessage;
-          
-          // Apply filters
-          let match = true;
-          
-          if (options.topic && !message.topic.includes(options.topic)) {
-            match = false;
-          }
-          
-          if (options.payloadContains && !message.payload.includes(options.payloadContains)) {
-            match = false;
-          }
-          
-          // Only apply these filters if we're not already using the index
-          if (options.pendingSync === true && options.pendingSync !== message.pendingSync) {
-            match = false;
-          }
-          
-          if (options.pendingServerSync === true && options.pendingServerSync !== message.pendingServerSync) {
-            match = false;
-          }
-          
-          if (match) {
-            if (skipped < offset) {
-              skipped++;
-            } else if (messages.length < limit) {
-              messages.push(message);
-            }
-          }
-          
-          cursor.continue();
-        } else {
-          resolve(messages);
+        // Apply additional filters if needed
+        if (filters.pendingServerSync !== undefined) {
+          messages = messages.filter((msg: MqttMessage) => msg.pendingServerSync === filters.pendingServerSync);
         }
+        
+        resolve(messages);
       };
       
-      cursorRequest.onerror = () => reject(cursorRequest.error);
-    });
-  } catch (error) {
-    console.error('Error retrieving messages from IndexedDB:', error);
-    throw error;
-  }
-}
-
-export async function clearMessages(): Promise<void> {
-  try {
-    const db = await openDatabase();
-    const transaction = db.transaction([MESSAGES_STORE], 'readwrite');
-    const store = transaction.objectStore(MESSAGES_STORE);
-    
-    store.clear();
-    
-    return new Promise((resolve, reject) => {
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-  } catch (error) {
-    console.error('Error clearing messages from IndexedDB:', error);
-    throw error;
-  }
-}
-
-export async function getMessageCount(): Promise<number> {
-  try {
-    const db = await openDatabase();
-    const transaction = db.transaction([MESSAGES_STORE], 'readonly');
-    const store = transaction.objectStore(MESSAGES_STORE);
-    
-    const countRequest = store.count();
-    
-    return new Promise((resolve, reject) => {
-      countRequest.onsuccess = () => resolve(countRequest.result);
-      countRequest.onerror = () => reject(countRequest.error);
-    });
-  } catch (error) {
-    console.error('Error counting messages in IndexedDB:', error);
-    throw error;
-  }
-}
-
-export async function exportMessages(format: 'json' | 'csv' = 'json'): Promise<string> {
-  try {
-    const messages = await getMessages();
-    
-    if (format === 'json') {
-      return JSON.stringify(messages, null, 2);
-    } else if (format === 'csv') {
-      // Create CSV header
-      let csv = 'id,timestamp,topic,payload,qos,retain,pendingSync,pendingServerSync\n';
+      request.onerror = (event) => {
+        console.error('Error getting messages:', event);
+        reject('Error getting messages');
+      };
       
-      // Add rows
-      messages.forEach(msg => {
-        const timestamp = new Date(msg.timestamp).toISOString();
-        const payload = msg.payload.replace(/"/g, '""'); // Escape quotes
-        
-        csv += `${msg.id},${timestamp},"${msg.topic}","${payload}",${msg.qos || ''},${msg.retain || ''},${msg.pendingSync || false},${msg.pendingServerSync || false}\n`;
-      });
+      transaction.oncomplete = () => {
+        db.close();
+      };
+    });
+  } catch (error) {
+    console.error('Error getting messages:', error);
+    throw error;
+  }
+}
+
+/**
+ * Delete messages from IndexedDB by ID
+ * @param messageIds Array of message IDs to delete
+ * @returns Promise that resolves when the messages are deleted
+ */
+export async function deleteMessages(messageIds: string[]): Promise<void> {
+  if (messageIds.length === 0) {
+    return;
+  }
+  
+  try {
+    const db = await initializeDatabase();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(MESSAGES_STORE, 'readwrite');
+      const store = transaction.objectStore(MESSAGES_STORE);
       
-      return csv;
-    } else {
-      throw new Error('Unsupported export format');
-    }
-  } catch (error) {
-    console.error('Error exporting messages:', error);
-    throw error;
-  }
-}
-
-// Analytics functions
-export async function storeAnalyticsEvent(event: AnalyticsEvent): Promise<void> {
-  try {
-    const db = await openDatabase();
-    const transaction = db.transaction([ANALYTICS_STORE], 'readwrite');
-    const store = transaction.objectStore(ANALYTICS_STORE);
-    
-    // Set default values
-    if (event.synced === undefined) {
-      event.synced = false;
-    }
-    
-    store.add(event);
-    
-    return new Promise((resolve, reject) => {
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-    });
-  } catch (error) {
-    console.error('Error storing analytics event:', error);
-    throw error;
-  }
-}
-
-export async function getUnsyncedAnalyticsEvents(): Promise<AnalyticsEvent[]> {
-  try {
-    const db = await openDatabase();
-    const transaction = db.transaction([ANALYTICS_STORE], 'readonly');
-    const store = transaction.objectStore(ANALYTICS_STORE);
-    const index = store.index('synced');
-    
-    const request = index.getAll(IDBKeyRange.only(false));
-    
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  } catch (error) {
-    console.error('Error getting unsynced analytics events:', error);
-    throw error;
-  }
-}
-
-export async function markAnalyticsEventsSynced(ids: string[]): Promise<void> {
-  try {
-    const db = await openDatabase();
-    const transaction = db.transaction([ANALYTICS_STORE], 'readwrite');
-    const store = transaction.objectStore(ANALYTICS_STORE);
-    
-    const promises = ids.map(id => {
-      return new Promise<void>((resolve, reject) => {
-        const request = store.get(id);
+      let completedCount = 0;
+      let errorCount = 0;
+      
+      for (const id of messageIds) {
+        const request = store.delete(id);
         
         request.onsuccess = () => {
-          const event = request.result;
-          if (event) {
-            event.synced = true;
-            store.put(event);
+          completedCount++;
+          if (completedCount + errorCount === messageIds.length) {
+            if (errorCount > 0) {
+              reject(`Failed to delete ${errorCount} messages`);
+            } else {
+              resolve();
+            }
           }
-          resolve();
         };
         
-        request.onerror = () => reject(request.error);
-      });
-    });
-    
-    await Promise.all(promises);
-    
-    return new Promise((resolve, reject) => {
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
+        request.onerror = (event) => {
+          console.error(`Error deleting message ${id}:`, event);
+          errorCount++;
+          if (completedCount + errorCount === messageIds.length) {
+            reject(`Failed to delete ${errorCount} messages`);
+          }
+        };
+      }
+      
+      transaction.oncomplete = () => {
+        db.close();
+      };
     });
   } catch (error) {
-    console.error('Error marking analytics events as synced:', error);
+    console.error('Error deleting messages:', error);
     throw error;
   }
 }
+
+/**
+ * Clear all messages from IndexedDB
+ * @returns Promise that resolves when all messages are cleared
+ */
+export async function clearMessages(): Promise<void> {
+  try {
+    const db = await initializeDatabase();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(MESSAGES_STORE, 'readwrite');
+      const store = transaction.objectStore(MESSAGES_STORE);
+      
+      const request = store.clear();
+      
+      request.onsuccess = () => {
+        resolve();
+      };
+      
+      request.onerror = (event) => {
+        console.error('Error clearing messages:', event);
+        reject('Error clearing messages');
+      };
+      
+      transaction.oncomplete = () => {
+        db.close();
+      };
+    });
+  } catch (error) {
+    console.error('Error clearing messages:', error);
+    throw error;
+  }
+}
+
+/**
+ * Mark analytics events as synced
+ * @param eventIds Array of event IDs to mark as synced
+ * @returns Promise that resolves when the events are marked as synced
+ */
+export async function markAnalyticsEventsSynced(eventIds: string[]): Promise<void> {
+  if (eventIds.length === 0) {
+    return;
+  }
+  
+  try {
+    const db = await initializeDatabase();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(ANALYTICS_STORE, 'readwrite');
+      const store = transaction.objectStore(ANALYTICS_STORE);
+      
+      let completedCount = 0;
+      let errorCount = 0;
+      
+      for (const id of eventIds) {
+        // Get the event first
+        const getRequest = store.get(id);
+        
+        getRequest.onsuccess = () => {
+          const event = getRequest.result;
+          if (event) {
+            // Update the event
+            event.synced = true;
+            event.syncTimestamp = Date.now();
+            
+            // Put it back
+            const putRequest = store.put(event);
+            
+            putRequest.onsuccess = () => {
+              completedCount++;
+              if (completedCount + errorCount === eventIds.length) {
+                if (errorCount > 0) {
+                  reject(`Failed to mark ${errorCount} events as synced`);
+                } else {
+                  resolve();
+                }
+              }
+            };
+            
+            putRequest.onerror = (event) => {
+              console.error(`Error updating event ${id}:`, event);
+              errorCount++;
+              if (completedCount + errorCount === eventIds.length) {
+                reject(`Failed to mark ${errorCount} events as synced`);
+              }
+            };
+          } else {
+            // Event not found
+            console.warn(`Event ${id} not found`);
+            completedCount++;
+            if (completedCount + errorCount === eventIds.length) {
+              if (errorCount > 0) {
+                reject(`Failed to mark ${errorCount} events as synced`);
+              } else {
+                resolve();
+              }
+            }
+          }
+        };
+        
+        getRequest.onerror = (event) => {
+          console.error(`Error getting event ${id}:`, event);
+          errorCount++;
+          if (completedCount + errorCount === eventIds.length) {
+            reject(`Failed to mark ${errorCount} events as synced`);
+          }
+        };
+      }
+      
+      transaction.oncomplete = () => {
+        db.close();
+      };
+    });
+  } catch (error) {
+    console.error('Error marking events as synced:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get the count of stored messages
+ * @returns Promise that resolves with the count of stored messages
+ */
+export async function getMessageCount(): Promise<number> {
+  try {
+    const db = await initializeDatabase();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(MESSAGES_STORE, 'readonly');
+      const store = transaction.objectStore(MESSAGES_STORE);
+      
+      const request = store.count();
+      
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
+      
+      request.onerror = (event) => {
+        console.error('Error getting message count:', event);
+        reject('Error getting message count');
+      };
+      
+      transaction.oncomplete = () => {
+        db.close();
+      };
+    });
+  } catch (error) {
+    console.error('Error getting message count:', error);
+    throw error;
+  }
+}
+
+/**
+ * Store utility function
+ * Allows storing arbitrary data in IndexedDB
+ * @param storeName Name of the store to use
+ * @param data Data to store (must have an 'id' property)
+ * @returns Promise that resolves when the data is stored
+ */
+export async function storeData<T extends { id: string }>(
+  storeName: string,
+  data: T
+): Promise<void> {
+  try {
+    const db = await initializeDatabase();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+      
+      const request = store.put(data);
+      
+      request.onsuccess = () => {
+        resolve();
+      };
+      
+      request.onerror = (event) => {
+        console.error(`Error storing data in ${storeName}:`, event);
+        reject(`Error storing data in ${storeName}`);
+      };
+      
+      transaction.oncomplete = () => {
+        db.close();
+      };
+    });
+  } catch (error) {
+    console.error(`Error storing data in ${storeName}:`, error);
+    throw error;
+  }
+}
+
+// Initialize the database when the module is loaded
+initializeDatabase().catch(error => {
+  console.error('Failed to initialize database:', error);
+});

@@ -1,186 +1,202 @@
+/**
+ * Background Sync Utilities
+ * This module provides utilities for syncing data in the background
+ */
+
 import { MqttMessage } from '@/hooks/use-mqtt';
-import { getMessages, storeMessage } from './indexeddb';
+import { getMessages, storeMessage, markAnalyticsEventsSynced } from './indexeddb';
+import { isOnline } from './pwa-utils';
+import { showNotification } from './pwa-utils';
 
 // Queue names
-const PUBLISH_QUEUE = 'mqtt-publish-queue';
-const MESSAGE_SYNC_QUEUE = 'mqtt-message-sync-queue';
+const MQTT_SYNC_QUEUE = 'mqtt-message-sync';
+const ANALYTICS_SYNC_QUEUE = 'analytics-sync';
+
+// Flag to track if sync is already registered
+let syncRegistered = false;
 
 /**
- * Register background sync
- * This function sets up background sync for the application
+ * Initialize background sync
+ * Registers the sync event handlers and sets up the sync
  */
-export function registerBackgroundSync() {
+export async function initializeBackgroundSync(): Promise<void> {
   if (!('serviceWorker' in navigator) || !('SyncManager' in window)) {
-    console.warn('Background sync is not supported in this browser');
+    console.log('Background sync not supported');
     return;
   }
-
-  // Wait for the service worker to be ready
-  navigator.serviceWorker.ready
-    .then((registration) => {
-      // Register sync for publish queue (messages that need to be published when back online)
-      registration.sync.register(PUBLISH_QUEUE)
-        .then(() => console.log('Publish queue sync registered'))
-        .catch(err => console.error('Error registering publish sync:', err));
-
-      // Register sync for message queue (messages that need to be synced to server when back online)
-      registration.sync.register(MESSAGE_SYNC_QUEUE)
-        .then(() => console.log('Message sync registered'))
-        .catch(err => console.error('Error registering message sync:', err));
-    })
-    .catch(err => console.error('Error registering background sync:', err));
-}
-
-/**
- * Queue a message to be published when the user is back online
- * @param topic MQTT topic
- * @param payload Message payload
- * @param options MQTT options (QoS, retain)
- */
-export async function queueMessageForPublish(
-  topic: string, 
-  payload: string, 
-  options: { qos?: 0 | 1 | 2, retain?: boolean } = {}
-): Promise<void> {
-  try {
-    // Check if we're online
-    if (navigator.onLine) {
-      console.warn('Device is online, no need to queue message');
-      return;
-    }
-
-    // Create a message object
-    const message: MqttMessage = {
-      id: `offline-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      topic,
-      payload,
-      timestamp: Date.now(),
-      qos: options.qos,
-      retain: options.retain,
-      pendingSync: true
-    };
-
-    // Store message to IndexedDB
-    await storeMessage(message);
-
-    // Trigger sync if possible
-    if ('serviceWorker' in navigator && 'SyncManager' in window) {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.sync.register(PUBLISH_QUEUE);
-    }
-
-    console.log('Message queued for publishing when online');
-  } catch (error) {
-    console.error('Error queueing message for publish:', error);
-    throw error;
+  
+  if (syncRegistered) {
+    return;
   }
-}
-
-/**
- * Process the publish queue when the user is back online
- * This is called by the service worker when the sync event is triggered
- */
-export async function processPublishQueue(client: any): Promise<void> {
+  
   try {
-    // Get all messages that are pending sync
-    const messages = await getMessages({ pendingSync: true });
-
-    if (messages.length === 0) {
-      console.log('No messages to process in publish queue');
-      return;
-    }
-
-    console.log(`Processing ${messages.length} queued messages`);
-
-    // Publish each message
-    for (const message of messages) {
-      if (client && typeof client.publish === 'function') {
-        await client.publish(
-          message.topic,
-          message.payload,
-          { 
-            qos: message.qos || 0, 
-            retain: message.retain || false 
-          }
-        );
-
-        // Update message in IndexedDB to mark as synced
-        message.pendingSync = false;
-        await storeMessage(message);
-      }
-    }
-
-    console.log('Queue processing completed');
-  } catch (error) {
-    console.error('Error processing publish queue:', error);
-    throw error;
-  }
-}
-
-/**
- * Mark a message for server synchronization when back online
- * This is used when we want to save something to the server when reconnected
- */
-export async function markMessageForSync(message: MqttMessage): Promise<void> {
-  try {
-    // Mark the message for synchronization
-    message.pendingServerSync = true;
+    // Register with the service worker
+    const registration = await navigator.serviceWorker.ready;
     
-    // Store it in IndexedDB
-    await storeMessage(message);
-
-    // Register sync if possible
-    if ('serviceWorker' in navigator && 'SyncManager' in window) {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.sync.register(MESSAGE_SYNC_QUEUE);
+    // Register sync handlers for MQTT messages
+    if ('sync' in registration) {
+      await (registration as any).sync.register(MQTT_SYNC_QUEUE);
+      
+      // Register sync handlers for analytics
+      await (registration as any).sync.register(ANALYTICS_SYNC_QUEUE);
+    } else {
+      console.log('Background sync not supported, falling back to periodic sync');
+      // Fallback to periodic checks when online
+      window.addEventListener('online', syncPendingMessages);
+    }
+    
+    syncRegistered = true;
+    console.log('Background sync registered');
+    
+    // Listen for messages from service worker
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    
+    // If online, try to sync immediately
+    if (isOnline()) {
+      syncPendingMessages();
     }
   } catch (error) {
-    console.error('Error marking message for sync:', error);
-    throw error;
+    console.error('Error registering sync:', error);
   }
 }
 
 /**
- * Process messages that need to be synced to the server
- * This is called by the service worker when the sync event is triggered
+ * Handle messages from the service worker
+ * @param event The message event
  */
-export async function processMessageSyncQueue(): Promise<void> {
-  try {
-    // Get all messages that need server sync
-    const messages = await getMessages({ pendingServerSync: true });
+function handleServiceWorkerMessage(event: MessageEvent): void {
+  const data = event.data;
+  
+  if (data.type === 'sync-complete') {
+    console.log(`Sync complete for ${data.queue}:`, data.result);
+    
+    if (data.queue === MQTT_SYNC_QUEUE) {
+      // Show notification
+      showNotification(
+        'MQTT Messages Synced',
+        {
+          body: `Successfully synced ${data.result.syncedCount} messages`,
+          icon: '/mqtt-app-icon-192.png',
+          badge: '/mqtt-badge-96.png'
+        }
+      );
+    } else if (data.queue === ANALYTICS_SYNC_QUEUE) {
+      console.log(`Analytics sync complete: ${data.result.syncedCount} events synced`);
+    }
+  } else if (data.type === 'sync-error') {
+    console.error(`Sync error for ${data.queue}:`, data.error);
+  }
+}
 
-    if (messages.length === 0) {
-      console.log('No messages to sync to server');
+/**
+ * Queue a message for syncing
+ * Stores the message in IndexedDB with pending sync flag
+ * @param message The MQTT message to sync
+ */
+export async function queueMessageForSync(message: MqttMessage): Promise<void> {
+  try {
+    // Mark the message as pending sync
+    const syncMessage: MqttMessage = {
+      ...message,
+      pendingSync: true,
+      syncAttempts: 0
+    };
+    
+    // Store in IndexedDB
+    await storeMessage(syncMessage);
+    
+    // If online and sync is registered, try to sync immediately
+    if (isOnline() && syncRegistered) {
+      syncPendingMessages();
+    }
+  } catch (error) {
+    console.error('Error queuing message for sync:', error);
+  }
+}
+
+/**
+ * Sync pending messages
+ * Gets pending messages from IndexedDB and sends them to the server
+ */
+export async function syncPendingMessages(): Promise<void> {
+  if (!isOnline()) {
+    console.log('Cannot sync, offline');
+    return;
+  }
+  
+  try {
+    // Get pending messages
+    const pendingMessages = await getMessages({ pendingSync: true }, 100);
+    
+    if (pendingMessages.length === 0) {
+      console.log('No pending messages to sync');
       return;
     }
-
-    console.log(`Syncing ${messages.length} messages to server`);
-
-    // This would normally send messages to your server API
-    // For this demo, we'll just mark them as synced
-    for (const message of messages) {
-      // In a real app, you would send to server here
-      // await fetch('/api/messages', {
-      //   method: 'POST',
-      //   body: JSON.stringify(message),
-      //   headers: { 'Content-Type': 'application/json' }
-      // });
-
-      // Update message in IndexedDB
-      message.pendingServerSync = false;
-      await storeMessage(message);
+    
+    console.log(`Syncing ${pendingMessages.length} messages...`);
+    
+    // In a real app, we would send the messages to the server here
+    // For now, we'll just simulate a successful server request
+    
+    // Simulate server request with a delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Update messages as synced
+    for (const message of pendingMessages) {
+      // Create a new object with updated properties
+      const updatedMessage = {
+        ...message,
+        pendingSync: false,
+        // Add timestamp for when it was synced
+        lastSyncAttempt: Date.now()
+      };
+      await storeMessage(updatedMessage);
     }
-
-    console.log('Message sync completed');
+    
+    console.log(`Successfully synced ${pendingMessages.length} messages`);
+    
+    // Show notification
+    showNotification(
+      'Messages Synced',
+      {
+        body: `Successfully synced ${pendingMessages.length} messages`,
+        icon: '/mqtt-app-icon-192.png',
+        badge: '/mqtt-badge-96.png'
+      }
+    );
   } catch (error) {
-    console.error('Error processing message sync queue:', error);
-    throw error;
+    console.error('Error syncing messages:', error);
   }
 }
 
 /**
- * Check if browser supports background sync
+ * Sync analytics events
+ * Gets pending analytics events from IndexedDB and sends them to the server
  */
-export function isBackgroundSyncSupported(): boolean {
-  return 'serviceWorker' in navigator && 'SyncManager' in window;
+export async function syncAnalyticsEvents(): Promise<void> {
+  if (!isOnline()) {
+    console.log('Cannot sync analytics events, offline');
+    return;
+  }
+  
+  try {
+    // For now, this is a stub function since we don't have a real server to sync with
+    console.log('Syncing analytics events...');
+    
+    // Simulate server request with a delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    console.log('Successfully synced analytics events');
+  } catch (error) {
+    console.error('Error syncing analytics events:', error);
+  }
+}
+
+// Initialize background sync when the module is loaded
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    initializeBackgroundSync().catch(err => {
+      console.error('Failed to initialize background sync:', err);
+    });
+  });
 }

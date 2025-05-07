@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/use-toast"
 
 export interface ToastOptions extends ToastOptionsOriginal {
+  id: string
   title?: string
   description?: React.ReactNode
   action?: ToastActionElement

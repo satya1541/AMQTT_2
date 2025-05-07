@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import mqtt, { IClientOptions, MqttClient, ISubscriptionGrant } from 'mqtt';
 import { useToast } from './use-toast';
-import { storeMessage, getMessages, ExtendedMqttMessage } from '@/lib/indexeddb';
+import { storeMessage, getMessages } from '@/lib/indexeddb';
 import { loadSetting, saveSetting } from '@/lib/storage';
-import { queueMessageForPublish, registerBackgroundSync } from '@/lib/background-sync';
+import { queueMessageForSync, initializeBackgroundSync } from '@/lib/background-sync';
 import { trackMessagePublished, trackConnection, trackError, initializeAnalytics } from '@/lib/offline-analytics';
+import { mqttClient, WebSocketMqttClient } from '@/lib/mqtt-client';
 
 // Types
 export interface MqttMessage {
@@ -15,6 +16,11 @@ export interface MqttMessage {
   retain?: boolean;
   qos?: 0 | 1 | 2;
   isSys?: boolean;
+  pendingSync?: boolean;
+  pendingServerSync?: boolean;
+  syncAttempts?: number;
+  syncError?: string;
+  lastSyncAttempt?: number;
 }
 
 export interface ConnectionProfile {
@@ -200,8 +206,8 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Initialize analytics
     initializeAnalytics();
     
-    // Register background sync
-    registerBackgroundSync();
+    // Initialize background sync
+    initializeBackgroundSync();
     
     // Add service worker message listener
     if ('serviceWorker' in navigator) {
@@ -231,130 +237,168 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const clientId = options.clientId || `mqtt-explorer-${Math.random().toString(16).substr(2, 8)}`;
-      const mqttOptions: IClientOptions = {
-        clientId,
-        username: options.username,
-        password: options.password,
-        clean: options.clean !== undefined ? options.clean : true,
-        reconnectPeriod: 5000, // Auto reconnect after 5 seconds
-      };
-
-      const mqttClient = mqtt.connect(options.brokerUrl, mqttOptions);
-
-      mqttClient.on('connect', () => {
-        setConnectionStatus('connected');
-        setConnectionOptions(options);
-        
-        // Track successful connection in analytics
-        trackConnection(options.brokerUrl, true);
-        
-        toast({
-          title: "Connected",
-          description: `Successfully connected to ${options.brokerUrl}`,
-          variant: "success",
-          id: Date.now().toString()
-        });
-
-        // Subscribe to base topic
-        if (options.baseTopic) {
-          mqttClient.subscribe(options.baseTopic, { qos: options.qos || 1 });
-          setSubscriptions(prev => [...prev.filter(sub => sub.topic !== options.baseTopic), { topic: options.baseTopic, qos: options.qos || 1 }]);
-        }
-
-        // Subscribe to $SYS topics if enabled
-        if (options.enableSysTopics) {
-          const sysTopics = [
-            '$SYS/broker/version',
-            '$SYS/broker/uptime',
-            '$SYS/broker/clients/connected',
-            '$SYS/broker/clients/total',
-            '$SYS/broker/messages/received',
-            '$SYS/broker/messages/sent',
-            '$SYS/broker/bytes/received',
-            '$SYS/broker/bytes/sent',
-            '$SYS/broker/load/messages/received/1min',
-            '$SYS/broker/load/messages/sent/1min',
-            '$SYS/broker/load/bytes/received/1min',
-            '$SYS/broker/load/bytes/sent/1min'
-          ];
-          
-          sysTopics.forEach(topic => {
-            mqttClient.subscribe(topic, { qos: 0 });
-          });
-        }
-
-        // Start auto publishing if in auto mode
-        if (connectionMode === 'connect-auto') {
-          startAutoPublishing(autoPublishInterval);
-        } else if (connectionMode === 'connect-manual') {
-          startManualPublishing(manualMessage, manualPublishInterval);
-        }
-      });
-
-      mqttClient.on('message', (topic, payload, packet) => {
-        const isSys = topic.startsWith('$SYS/');
-        const message: MqttMessage = {
+      
+      // Set up WebSocket MQTT client connection
+      mqttClient.onMessage((message) => {
+        const isSys = message.topic.startsWith('$SYS/');
+        const mqttMessage: MqttMessage = {
           id: Math.random().toString(36).substring(2, 15),
-          topic,
-          payload: payload.toString(),
-          timestamp: Date.now(),
-          retain: packet.retain,
-          qos: packet.qos as 0 | 1 | 2,
+          topic: message.topic,
+          payload: message.payload.toString(),
+          timestamp: message.timestamp,
+          retain: message.retain,
+          qos: message.qos as 0 | 1 | 2,
           isSys
         };
 
         // Update messages list
         setMessages(prev => {
-          const updatedMessages = [...prev, message];
+          const updatedMessages = [...prev, mqttMessage];
           // Keep only the last 100 messages in state for performance
           return updatedMessages.slice(-100);
         });
 
         // Store non-$SYS messages in IndexedDB
         if (!isSys) {
-          storeMessage(message);
+          storeMessage(mqttMessage);
         } else {
           // Update $SYS topics state
           if (enableSysTopics) {
-            const sysTopic = topic.replace('$SYS/broker/', '');
+            const sysTopic = message.topic.replace('$SYS/broker/', '');
             setSysTopics(prev => ({
               ...prev,
-              [sysTopic]: payload.toString()
+              [sysTopic]: message.payload.toString()
             }));
           }
         }
       });
 
-      mqttClient.on('error', (err) => {
-        console.error('MQTT client error:', err);
-        toast({
-          title: "Connection Error",
-          description: `Error: ${err.message}`,
-          variant: "destructive",
-        });
+      mqttClient.onStatusChange((status, error) => {
+        console.log('MQTT status change:', status);
+        
+        switch (status) {
+          case 'connected':
+            setConnectionStatus('connected');
+            setConnectionOptions(options);
+            
+            // Track successful connection in analytics
+            trackConnection(options.brokerUrl, true);
+            
+            toast({
+              title: "Connected",
+              description: `Successfully connected to ${options.brokerUrl}`,
+              variant: "success",
+              id: Date.now().toString()
+            });
+
+            // Subscribe to base topic
+            if (options.baseTopic) {
+              mqttClient.subscribe(options.baseTopic, options.qos || 1)
+                .then(() => {
+                  setSubscriptions(prev => [...prev.filter(sub => sub.topic !== options.baseTopic), 
+                    { topic: options.baseTopic, qos: options.qos || 1 }]);
+                })
+                .catch(err => console.error('Error subscribing to base topic:', err));
+            }
+
+            // Subscribe to $SYS topics if enabled
+            if (options.enableSysTopics) {
+              const sysTopics = [
+                '$SYS/broker/version',
+                '$SYS/broker/uptime',
+                '$SYS/broker/clients/connected',
+                '$SYS/broker/clients/total',
+                '$SYS/broker/messages/received',
+                '$SYS/broker/messages/sent',
+                '$SYS/broker/bytes/received',
+                '$SYS/broker/bytes/sent',
+                '$SYS/broker/load/messages/received/1min',
+                '$SYS/broker/load/messages/sent/1min',
+                '$SYS/broker/load/bytes/received/1min',
+                '$SYS/broker/load/bytes/sent/1min'
+              ];
+              
+              sysTopics.forEach(topic => {
+                mqttClient.subscribe(topic, 0).catch(err => 
+                  console.error(`Error subscribing to sys topic ${topic}:`, err));
+              });
+            }
+
+            // Start auto publishing if in auto mode
+            if (connectionMode === 'connect-auto') {
+              startAutoPublishing(autoPublishInterval);
+            } else if (connectionMode === 'connect-manual') {
+              startManualPublishing(manualMessage, manualPublishInterval);
+            }
+            break;
+            
+          case 'disconnected':
+            setConnectionStatus('disconnected');
+            stopAutoPublishing();
+            stopManualPublishing();
+            toast({
+              title: "Disconnected",
+              description: "Connection closed",
+              variant: "warning",
+              id: `disconnected-${Date.now()}`
+            });
+            break;
+            
+          case 'reconnecting':
+          case 'connecting':
+            setConnectionStatus('connecting');
+            toast({
+              title: "Reconnecting",
+              description: "Attempting to reconnect...",
+              variant: "connecting",
+              id: `reconnect-${Date.now()}`
+            });
+            break;
+            
+          case 'error':
+            if (error) {
+              console.error('MQTT client error:', error);
+              
+              // Track connection error in analytics
+              if (options) {
+                trackConnection(options.brokerUrl, false, error.message);
+                trackError('connection_error', { 
+                  broker: options.brokerUrl,
+                  error: error.message,
+                  timestamp: Date.now()
+                });
+              }
+              
+              toast({
+                title: "Connection Error",
+                description: `Error: ${error.message}`,
+                variant: "destructive",
+                id: `conn-error-${Date.now()}`
+              });
+            }
+            break;
+        }
       });
 
-      mqttClient.on('close', () => {
+      // Connect to MQTT broker via WebSocket
+      mqttClient.connect({
+        brokerUrl: options.brokerUrl,
+        clientId: clientId,
+        username: options.username,
+        password: options.password,
+        clean: options.clean !== undefined ? options.clean : true,
+        reconnectPeriod: 5000 // Auto reconnect after 5 seconds
+      }).catch(error => {
+        console.error('Failed to connect:', error);
         setConnectionStatus('disconnected');
-        stopAutoPublishing();
-        stopManualPublishing();
         toast({
-          title: "Disconnected",
-          description: "Connection closed",
-          variant: "warning",
+          title: "Connection Failed",
+          description: `Failed to connect: ${error.message}`,
+          variant: "destructive",
+          id: `conn-failed-${Date.now()}`
         });
       });
 
-      mqttClient.on('reconnect', () => {
-        setConnectionStatus('connecting');
-        toast({
-          title: "Reconnecting",
-          description: "Attempting to reconnect...",
-          variant: "connecting",
-        });
-      });
-
-      setClient(mqttClient);
     } catch (error) {
       console.error('Failed to connect:', error);
       setConnectionStatus('disconnected');
@@ -362,81 +406,180 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
         title: "Connection Failed",
         description: `Failed to connect: ${(error as Error).message}`,
         variant: "destructive",
+        id: `conn-failed-${Date.now()}`
       });
     }
-  }, [client, connectionMode, autoPublishInterval, manualPublishInterval, manualMessage, enableSysTopics, toast]);
+  }, [connectionMode, autoPublishInterval, manualPublishInterval, manualMessage, enableSysTopics, toast]);
 
   // Disconnect from MQTT broker
   const disconnect = useCallback(() => {
-    if (client) {
-      stopAutoPublishing();
-      stopManualPublishing();
-      client.end();
-      setClient(null);
-      setConnectionStatus('disconnected');
-      setSubscriptions([]);
-      setSysTopics({});
-      toast({
-        title: "Disconnected",
-        description: "Successfully disconnected from broker",
-        variant: "info",
-      });
-    }
-  }, [client, toast]);
+    stopAutoPublishing();
+    stopManualPublishing();
+    
+    // Disconnect the WebSocket MQTT client
+    mqttClient.disconnect();
+    
+    setClient(null);
+    setConnectionStatus('disconnected');
+    setSubscriptions([]);
+    setSysTopics({});
+    toast({
+      title: "Disconnected",
+      description: "Successfully disconnected from broker",
+      variant: "info",
+      id: `disconnect-${Date.now()}`
+    });
+  }, [toast]);
 
   // Publish message
   const publish = useCallback((topic: string, message: string, options?: { qos?: 0 | 1 | 2, retain?: boolean }) => {
-    if (client && connectionStatus === 'connected') {
+    const finalQos = options?.qos !== undefined ? options.qos : qos;
+    const finalRetain = options?.retain !== undefined ? options.retain : retain;
+    
+    // Create a message object
+    const msgId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const timestamp = Date.now();
+    
+    // Create the message for tracking
+    const msgObject: MqttMessage = {
+      id: msgId,
+      topic,
+      payload: message,
+      timestamp,
+      qos: finalQos,
+      retain: finalRetain
+    };
+    
+    // If connected, publish directly
+    if (connectionStatus === 'connected') {
       try {
-        client.publish(
-          topic, 
-          message, 
-          { 
-            qos: options?.qos !== undefined ? options.qos : qos, 
-            retain: options?.retain !== undefined ? options.retain : retain 
-          }, 
-          (err) => {
-            if (err) {
-              console.error('Publish error:', err);
-              toast({
-                title: "Publish Error",
-                description: `Failed to publish: ${err.message}`,
-                variant: "destructive",
-              });
-            } else {
-              setLastPublished(new Date());
-            }
-          }
-        );
+        mqttClient.publish(topic, message, { qos: finalQos, retain: finalRetain })
+          .then(() => {
+            // Successfully published
+            setLastPublished(new Date());
+            
+            // Track in analytics
+            trackMessagePublished(topic, finalQos, finalRetain);
+            
+            toast({
+              title: "Published",
+              description: `Message sent to ${topic}`,
+              variant: "success",
+              id: msgId
+            });
+          })
+          .catch((err) => {
+            console.error('Publish error:', err);
+            
+            // Track error in analytics
+            trackError('publish_error', { 
+              topic, 
+              error: err.message,
+              timestamp
+            });
+            
+            // Try to queue for offline publishing
+            const mqttMsg: MqttMessage = {
+              id: msgId,
+              topic,
+              payload: message,
+              timestamp,
+              qos: finalQos,
+              retain: finalRetain,
+              pendingSync: true
+            };
+            queueMessageForSync(mqttMsg).catch(queueErr => {
+              console.error('Failed to queue message for offline publishing:', queueErr);
+            });
+            
+            toast({
+              title: "Publish Error",
+              description: `Failed to publish: ${err.message}`,
+              variant: "destructive",
+              id: msgId
+            });
+          });
       } catch (error) {
         console.error('Publish failed:', error);
+        
+        // Track error
+        trackError('publish_exception', { 
+          topic, 
+          error: (error as Error).message,
+          timestamp
+        });
+        
+        // Try to queue for offline publishing
+        const mqttMsg: MqttMessage = {
+          id: msgId,
+          topic,
+          payload: message,
+          timestamp,
+          qos: finalQos,
+          retain: finalRetain,
+          pendingSync: true
+        };
+        queueMessageForSync(mqttMsg).catch(queueErr => {
+          console.error('Failed to queue message for offline publishing:', queueErr);
+        });
+        
         toast({
           title: "Publish Failed",
           description: `Error: ${(error as Error).message}`,
           variant: "destructive",
+          id: msgId
         });
       }
     } else {
-      toast({
-        title: "Cannot Publish",
-        description: "Not connected to a broker",
-        variant: "warning",
-      });
+      // Not connected, try to queue message for offline publishing
+      if (navigator.onLine === false) {
+        // Definitely offline, queue for later
+        // Update the message object with pendingSync flag
+        const mqttMsg: MqttMessage = {
+          ...msgObject,
+          pendingSync: true
+        };
+        
+        // Queue for background sync and store in IndexedDB
+        queueMessageForSync(mqttMsg).then(() => {
+          toast({
+            title: "Queued for Sending",
+            description: "You're currently offline. The message will be sent when you reconnect.",
+            variant: "info",
+            id: msgId
+          });
+          
+          // Store message in IndexedDB
+          storeMessage(mqttMsg);
+          
+          // Set virtual last published time
+          setLastPublished(new Date());
+        }).catch(err => {
+          console.error('Failed to queue message for offline publishing:', err);
+          toast({
+            title: "Offline Publishing Failed",
+            description: `Unable to queue message: ${err.message}`,
+            variant: "destructive",
+            id: msgId
+          });
+        });
+      } else {
+        // Online but not connected
+        toast({
+          title: "Cannot Publish",
+          description: "Not connected to a broker. Connect first or check your connection settings.",
+          variant: "warning",
+          id: msgId
+        });
+      }
     }
-  }, [client, connectionStatus, qos, retain, toast]);
+  }, [connectionStatus, qos, retain, toast]);
 
   // Subscribe to topic
   const subscribe = useCallback((topic: string, qosLevel: 0 | 1 | 2 = 1) => {
-    if (client && connectionStatus === 'connected') {
-      client.subscribe(topic, { qos: qosLevel }, (err, granted) => {
-        if (err) {
-          console.error('Subscribe error:', err);
-          toast({
-            title: "Subscribe Error",
-            description: `Failed to subscribe to ${topic}: ${err.message}`,
-            variant: "destructive",
-          });
-        } else if (granted) {
+    if (connectionStatus === 'connected') {
+      mqttClient.subscribe(topic, qosLevel)
+        .then(() => {
           // Update subscriptions list
           setSubscriptions(prev => {
             const exists = prev.some(sub => sub.topic === topic);
@@ -451,30 +594,33 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
             title: "Subscribed",
             description: `Successfully subscribed to ${topic}`,
             variant: "success",
+            id: `sub-success-${Date.now()}`
           });
-        }
-      });
+        })
+        .catch((err) => {
+          console.error('Subscribe error:', err);
+          toast({
+            title: "Subscribe Error",
+            description: `Failed to subscribe to ${topic}: ${err.message}`,
+            variant: "destructive",
+            id: `sub-error-${Date.now()}`
+          });
+        });
     } else {
       toast({
         title: "Cannot Subscribe",
         description: "Not connected to a broker",
         variant: "warning",
+        id: `sub-warning-${Date.now()}`
       });
     }
-  }, [client, connectionStatus, toast]);
+  }, [connectionStatus, toast]);
 
   // Unsubscribe from topic
   const unsubscribe = useCallback((topic: string) => {
-    if (client && connectionStatus === 'connected') {
-      client.unsubscribe(topic, (err) => {
-        if (err) {
-          console.error('Unsubscribe error:', err);
-          toast({
-            title: "Unsubscribe Error",
-            description: `Failed to unsubscribe from ${topic}: ${err.message}`,
-            variant: "destructive",
-          });
-        } else {
+    if (connectionStatus === 'connected') {
+      mqttClient.unsubscribe(topic)
+        .then(() => {
           // Remove from subscriptions list
           setSubscriptions(prev => prev.filter(sub => sub.topic !== topic));
           
@@ -482,11 +628,27 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
             title: "Unsubscribed",
             description: `Successfully unsubscribed from ${topic}`,
             variant: "info",
+            id: `unsub-success-${Date.now()}`
           });
-        }
+        })
+        .catch((err) => {
+          console.error('Unsubscribe error:', err);
+          toast({
+            title: "Unsubscribe Error",
+            description: `Failed to unsubscribe from ${topic}: ${err.message}`,
+            variant: "destructive",
+            id: `unsub-error-${Date.now()}`
+          });
+        });
+    } else {
+      toast({
+        title: "Cannot Unsubscribe",
+        description: "Not connected to a broker",
+        variant: "warning",
+        id: `unsub-warning-${Date.now()}`
       });
     }
-  }, [client, connectionStatus, toast]);
+  }, [connectionStatus, toast]);
 
   // Clear messages
   const clearMessages = useCallback(() => {
@@ -544,7 +706,7 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
     stopAutoPublishing();
     stopManualPublishing();
     
-    if (client && connectionStatus === 'connected' && connectionOptions?.baseTopic) {
+    if (connectionStatus === 'connected' && connectionOptions?.baseTopic) {
       const generateRandomData = () => {
         const temp = (20 + Math.random() * 10).toFixed(1);
         const humid = Math.floor(30 + Math.random() * 50);
@@ -584,9 +746,10 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
         title: "Auto Publishing Started",
         description: `Publishing random data every ${interval} seconds`,
         variant: "success",
+        id: `auto-pub-${Date.now()}`
       });
     }
-  }, [client, connectionStatus, connectionOptions, publish, toast]);
+  }, [connectionStatus, connectionOptions, publish, toast]);
 
   // Stop auto publishing
   const stopAutoPublishing = useCallback(() => {
@@ -598,6 +761,7 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast({
         title: "Auto Publishing Stopped",
         variant: "info",
+        id: `auto-pub-stop-${Date.now()}`
       });
     }
   }, [toast]);
@@ -607,7 +771,7 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
     stopAutoPublishing();
     stopManualPublishing();
     
-    if (client && connectionStatus === 'connected' && connectionOptions?.baseTopic) {
+    if (connectionStatus === 'connected' && connectionOptions?.baseTopic) {
       // Publish immediately
       try {
         // Validate JSON
@@ -625,16 +789,18 @@ export const MQTTProvider: React.FC<{ children: React.ReactNode }> = ({ children
           title: "Manual Publishing Started",
           description: `Publishing message every ${interval} seconds`,
           variant: "success",
+          id: `manual-pub-${Date.now()}`
         });
       } catch (e) {
         toast({
           title: "Invalid JSON",
           description: "The message is not valid JSON",
           variant: "destructive",
+          id: `json-error-${Date.now()}`
         });
       }
     }
-  }, [client, connectionStatus, connectionOptions, publish, stopAutoPublishing, toast]);
+  }, [connectionStatus, connectionOptions, publish, stopAutoPublishing, toast]);
 
   // Stop manual publishing
   const stopManualPublishing = useCallback(() => {
