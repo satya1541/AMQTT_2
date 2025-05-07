@@ -63,7 +63,7 @@ const AiInsights: React.FC = () => {
         headers: { 'Content-Type': 'application/json' }
       });
       
-      if (insightsResponse.insights) {
+      if (insightsResponse && insightsResponse.insights) {
         setInsights(insightsResponse.insights);
       }
       
@@ -74,7 +74,7 @@ const AiInsights: React.FC = () => {
         headers: { 'Content-Type': 'application/json' }
       });
       
-      if (recommendationsResponse.recommendations) {
+      if (recommendationsResponse && recommendationsResponse.recommendations) {
         setRecommendations(recommendationsResponse.recommendations);
       }
       
@@ -87,7 +87,7 @@ const AiInsights: React.FC = () => {
           headers: { 'Content-Type': 'application/json' }
         });
         
-        if (topicResponse.analysis) {
+        if (topicResponse && topicResponse.analysis) {
           setTopicAnalysis(topicResponse.analysis);
         }
       }

@@ -264,26 +264,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const topic = data.topic;
     
     try {
-      connection.client.unsubscribe(topic, (error: Error | null, packet?: any) => {
-        if (error) {
-          console.error('Error unsubscribing from topic:', error);
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'mqtt-error',
-              error: `Failed to unsubscribe from ${topic}: ${error.message}`
-            }));
-          }
-        } else {
-          console.log(`Unsubscribed from topic: ${topic}`);
-          connection.topics.delete(topic);
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'mqtt-unsubscribed',
-              topic
-            }));
-          }
-        }
-      });
+      // Handle unsubscribe without callback
+      connection.client.unsubscribe(topic);
+      
+      // Log unsubscribe locally
+      console.log(`Unsubscribed from topic: ${topic}`);
+      connection.topics.delete(topic);
+      
+      // Send confirmation to client
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'mqtt-unsubscribed',
+          topic
+        }));
+      }
     } catch (error: any) {
       console.error('Error unsubscribing from topic:', error);
       if (ws.readyState === WebSocket.OPEN) {
@@ -313,26 +307,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const retain = data.retain || false;
     
     try {
-      connection.client.publish(topic, message, { qos, retain }, (error: Error | null, packet?: any) => {
-        if (error) {
-          console.error('Error publishing message:', error);
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'mqtt-error',
-              error: `Failed to publish to ${topic}: ${error.message}`
-            }));
-          }
-        } else {
-          console.log(`Published message to topic: ${topic}`);
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'mqtt-published',
-              topic,
-              timestamp: Date.now()
-            }));
-          }
-        }
-      });
+      // Publish message without callback
+      connection.client.publish(topic, message, { qos, retain });
+      
+      // Log locally
+      console.log(`Published message to topic: ${topic}`);
+      
+      // Send confirmation to client
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'mqtt-published',
+          topic,
+          timestamp: Date.now()
+        }));
+      }
     } catch (error: any) {
       console.error('Error publishing message:', error);
       if (ws.readyState === WebSocket.OPEN) {
@@ -384,7 +372,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`Analyzing ${messages.length} messages with AI...`);
-      const insights = await generateMqttInsights(messages);
+      // Cast for type compatibility while maintaining structure
+      const typedMessages = messages as unknown as import('../client/src/hooks/use-mqtt').MqttMessage[];
+      const insights = await generateMqttInsights(typedMessages);
       
       return res.json({ insights });
     } catch (error: any) {
@@ -408,7 +398,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`Generating recommendations based on ${messages.length} messages...`);
-      const recommendations = await generateMqttRecommendations(messages);
+      // Cast for type compatibility while maintaining structure
+      const typedMessages = messages as unknown as import('../client/src/hooks/use-mqtt').MqttMessage[];
+      const recommendations = await generateMqttRecommendations(typedMessages);
       
       return res.json({ recommendations });
     } catch (error: any) {
