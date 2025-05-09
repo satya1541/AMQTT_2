@@ -13,4 +13,36 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+export async function createUser(username: string, password: string) {
+  const [result] = await pool.execute(
+    'INSERT INTO users (username, password) VALUES (?, ?)',
+    [username, password]
+  );
+  return result;
+}
+
+export async function saveMqttMessage(topic: string, payload: any, userId?: number) {
+  const [result] = await pool.execute(
+    'INSERT INTO mqtt_messages (topic, payload, user_id) VALUES (?, ?, ?)',
+    [topic, JSON.stringify(payload), userId]
+  );
+  return result;
+}
+
+export async function createMqttRule(name: string, topic: string, condition: string, action: string, userId: number) {
+  const [result] = await pool.execute(
+    'INSERT INTO mqtt_rules (name, topic, `condition`, action, user_id) VALUES (?, ?, ?, ?, ?)',
+    [name, topic, condition, action, userId]
+  );
+  return result;
+}
+
+export async function getMqttRules(userId: number) {
+  const [rows] = await pool.execute(
+    'SELECT * FROM mqtt_rules WHERE user_id = ?',
+    [userId]
+  );
+  return rows;
+}
+
 export { pool };
