@@ -13,12 +13,62 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
   const { theme, toggleTheme } = useTheme();
   const { connectionStatus } = useMqtt();
 
-  // ... (variants and getStatusClass remain the same)
-  const logoVariants = { /* ... */ };
-  const statusVariants = { /* ... */ };
-  const getStatusClass = () => { /* ... */ };
-  const headerVariants = { /* ... */ };
-  const itemVariants = { /* ... */ };
+  const logoVariants = {
+    animate: {
+      scale: [1, 1.03, 1],
+      transition: {
+        duration: 3,
+        repeat: Infinity,
+        ease: "easeInOut"
+      }
+    }
+  };
+
+  const statusVariants = {
+    connecting: {
+      opacity: [0.5, 1, 0.5],
+      transition: {
+        duration: 1.5,
+        repeat: Infinity,
+        ease: "easeInOut"
+      }
+    },
+    connected: {},
+    disconnected: {}
+  };
+
+  const getStatusClass = () => {
+    switch (connectionStatus) {
+      case 'connected': return 'status-indicator status-connected';
+      case 'connecting': return 'status-indicator status-connecting';
+      case 'disconnected': return 'status-indicator status-disconnected';
+      default: return 'status-indicator';
+    }
+  };
+
+  const headerVariants = {
+    initial: {
+      opacity: 0,
+      y: -10
+    },
+    animate: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.5,
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    initial: { opacity: 0, y: -5 },
+    animate: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.4 }
+    }
+  };
 
   return (
     <motion.header
@@ -27,7 +77,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
       animate="animate"
       variants={headerVariants}
     >
-      {/* Top section of the header - Adjusted py to py-3 for a slightly less tall top section */}
       <div className="container mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center">
         <motion.div
           className="flex items-center space-x-3 mb-3 md:mb-0"
@@ -37,6 +86,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
           transition={{ type: "spring", stiffness: 400 }}
         >
           <motion.div
+            // Consider making logo icon size responsive if needed: e.g., h-8 w-8 sm:h-9 sm:w-9
             className="h-9 w-9 flex items-center justify-center bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg data-flow-icon relative overflow-hidden"
             whileHover={{ rotate: [0, 5, -5, 0], transition: { duration: 0.6 } }}
           >
@@ -47,6 +97,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
                 transition: { repeat: Infinity, duration: 2, ease: "linear" }
               }}
             />
+            {/* Consider making icon font size responsive: e.g., text-lg sm:text-xl */}
             <i className="fas fa-satellite-dish text-white text-xl relative z-10"></i>
           </motion.div>
           <motion.h1
@@ -57,18 +108,16 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
           </motion.h1>
         </motion.div>
 
-        {/* Status and Theme Toggle - Adjusted space-x for potentially smaller buttons */}
-        <motion.div className="flex items-center space-x-2 sm:space-x-3" variants={itemVariants}>
+        <motion.div className="flex items-center space-x-2 xs:space-x-4" variants={itemVariants}>
           <motion.div
-            // Status indicator - made it a bit more compact to match image style
-            className="glass-card px-3 py-1.5 rounded-full flex items-center text-xs sm:text-sm shadow-md"
+            className="glass-card px-3 py-1.5 xs:px-4 rounded-full flex items-center text-xs xs:text-sm shadow-md"
             variants={statusVariants}
             animate={connectionStatus}
             whileHover={{ scale: 1.05 }}
             transition={{ type: "spring", stiffness: 400 }}
           >
             <span className={getStatusClass()}></span>
-            <span className="ml-2"> {/* Removed sm:ml-2.5 for consistency */}
+            <span className="ml-1.5 xs:ml-2.5">
               {connectionStatus === 'connected' ? 'Connected' :
                connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
             </span>
@@ -80,8 +129,8 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
           >
             <Button
               variant="outline"
-              size="icon" // This size should be appropriate for an icon button
-              className="rounded-full bg-gray-800/50 border-gray-700 hover:bg-gray-700/50 relative overflow-hidden w-9 h-9 sm:w-10 sm:h-10" // Explicit size
+              size="icon"
+              className="rounded-full bg-gray-800/50 border-gray-700 hover:bg-gray-700/50 relative overflow-hidden"
               onClick={toggleTheme}
               aria-label="Toggle theme"
             >
@@ -91,21 +140,23 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
                 whileHover={{ scale: 1.5, opacity: 1 }}
                 transition={{ duration: 0.5 }}
               />
-              {/* Icon size for theme toggle */}
-              <i className={`fas ${theme === 'dark' ? 'fa-moon text-yellow-300' : 'fa-sun text-yellow-500'} text-base sm:text-lg relative z-10`}></i>
+              {theme === 'dark' ? (
+                <i className="fas fa-moon text-yellow-300 relative z-10"></i>
+              ) : (
+                <i className="fas fa-sun text-yellow-500 relative z-10"></i>
+              )}
             </Button>
           </motion.div>
         </motion.div>
       </div>
 
-      {/* Navigation - Icons Only */}
+      {/* Navigation */}
       <motion.nav
-        // Container for nav items, px-2 for tighter fit if needed on very small screens
-        className="container mx-auto px-2 sm:px-4 flex overflow-x-auto"
+        className="container mx-auto px-2 xs:px-4 flex overflow-x-auto" // Adjusted padding for smaller screens
         variants={itemVariants}
       >
-        {/* Centering the icons if they don't fill the width, space-x for gaps */}
-        <div className="flex justify-center sm:justify-start space-x-1 xs:space-x-2 w-full border-b border-purple-900/30">
+        {/* Adjusted space-x for smaller screens, ensure items can shrink if needed */}
+        <div className="flex space-x-1 xs:space-x-2 w-full border-b border-purple-900/30">
           {[
             { path: '/', icon: 'network-wired', label: 'Connection' },
             { path: '/live-feed', icon: 'stream', label: 'Live Feed' },
@@ -119,23 +170,29 @@ const AppHeader: React.FC<AppHeaderProps> = ({ currentPath }) => {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + index * 0.05, duration: 0.4 }}
-              className="relative flex-shrink-0" // Prevents icons from shrinking
+              className="relative flex-shrink-0" // Added flex-shrink-0 to prevent items from shrinking too much if space is tight before overflow scroll kicks in
             >
               <Link
                 href={item.path}
-                // Adjusted padding for icon-only bar: py-3 for height, px-3 or px-4 for width
-                // The image's active item has a darker background, so bg-gray-800/50 is good.
-                className={`flex items-center justify-center px-3 sm:px-4 py-3 relative group transition-all duration-300 ease-in-out ${
+                // Adjusted padding for smaller screens
+                className={`flex items-center px-2 py-3 sm:px-3 md:px-4 whitespace-nowrap relative group transition-all duration-300 ease-in-out ${
                   currentPath === item.path
-                    ? 'bg-gray-800/70 text-purple-400 border-b-2 border-purple-500' // Active: darker bg, purple text, purple border
-                    : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/30' // Inactive: hover state
+                    ? 'bg-gray-800/50 text-purple-400 border-b-2 border-purple-500'
+                    : 'text-gray-400 hover:text-gray-200'
                 }`}
-                title={item.label} // Add title for accessibility since label is hidden
               >
-                {/* Icon size: text-xl or text-2xl. Let's try text-xl. */}
-                <i className={`fas fa-${item.icon} text-lg sm:text-xl ${currentPath === item.path ? 'text-purple-400' : 'text-gray-400 group-hover:text-gray-200'}`}></i>
-                {/* Label is now permanently hidden visually, but good for screen readers if it were present */}
-                {/* <span className="hidden">{item.label}</span> */}
+                <motion.span
+                  whileHover={{
+                    scale: 1.2,
+                    transition: { duration: 0.2 }
+                  }}
+                  className="inline-block"
+                >
+                  {/* Icon: Adjusted size and margin */}
+                  <i className={`fas fa-${item.icon} text-sm xs:text-base sm:text-lg ${currentPath === item.path ? 'text-purple-400' : 'text-gray-400 group-hover:text-gray-300'} sm:mr-2`}></i>
+                </motion.span>
+                {/* Label: Hide on xs, show on sm and up. Adjusted text size for sm. */}
+                <span className="hidden sm:inline text-xs sm:text-sm">{item.label}</span>
               </Link>
             </motion.div>
           ))}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getMessages, clearMessages as dbClearMessages, getMessageCount } from '@/lib/indexeddb';
+import { getMessages, clearMessages, getMessageCount } from '@/lib/indexeddb'; // Ensure these imports are correct
 import { MqttMessage, useMqtt } from '@/hooks/use-mqtt';
 import { useToast } from '@/hooks/use-toast';
 import MessageExportPanel from '@/components/message-export-panel';
@@ -10,7 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 const History: React.FC = () => {
   const { toast } = useToast();
-  const { messages: liveMessages, clearMessages: clearLiveMessagesState } = useMqtt();
+  const { messages: liveMessages } = useMqtt();
 
   const [historicalMessages, setHistoricalMessages] = useState<MqttMessage[]>([]);
   const [startDateTime, setStartDateTime] = useState('');
@@ -24,17 +24,18 @@ const History: React.FC = () => {
   const messagesPerPage = 10;
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  // console.log(`[History Render] Live: ${liveMessages.length}, Hist: ${historicalMessages.length}, Page: ${currentPage}, Loading: ${isLoading}`);
+  // --- DEBUG ---
+  console.log(`[History Render] Live: ${liveMessages.length}, Hist: ${historicalMessages.length}, Page: ${currentPage}, Loading: ${isLoading}`);
 
   useEffect(() => {
-    // console.log("[History Effect] Filters/Page changed, loading historical...");
+    console.log("[History Effect] Filters/Page changed, loading historical..."); // <-- DEBUG
     loadHistoricalMessages();
   }, [currentPage, startDateTime, endDateTime, topicFilter, payloadFilter]);
 
   const updateTotalCount = async (filterOptions: any = {}) => {
     try {
       const count = await getMessageCount(filterOptions);
-      // console.log(`[History updateTotalCount] Count: ${count}`, filterOptions);
+      console.log(`[History updateTotalCount] Count: ${count}`, filterOptions); // <-- DEBUG
       setTotalHistoricalMessages(count);
       setTotalPages(Math.ceil(count / messagesPerPage));
     } catch (error) {
@@ -43,7 +44,7 @@ const History: React.FC = () => {
   };
 
   const loadHistoricalMessages = async () => {
-    // console.log(`[History loadHistoricalMessages] Loading Page: ${currentPage}`);
+    console.log(`[History loadHistoricalMessages] Loading Page: ${currentPage}`); // <-- DEBUG
     setIsLoading(true);
     try {
       const filterOptions: any = {
@@ -61,15 +62,15 @@ const History: React.FC = () => {
       if (topicFilter) filterOptions.topic = topicFilter;
       if (payloadFilter) filterOptions.payloadContains = payloadFilter;
 
-      // console.log("[History loadHistoricalMessages] Fetching with options:", filterOptions);
+      console.log("[History loadHistoricalMessages] Fetching with options:", filterOptions); // <-- DEBUG
       const historyMessages = await getMessages(filterOptions);
-      // console.log("[History loadHistoricalMessages] Received historical messages:", historyMessages);
+      console.log("[History loadHistoricalMessages] Received historical messages:", historyMessages); // <-- DEBUG Check data here!
       setHistoricalMessages(historyMessages);
 
       await updateTotalCount(filterOptions);
 
     } catch (error) {
-      console.error('[History loadHistoricalMessages] Error loading message history:', error);
+      console.error('[History loadHistoricalMessages] Error loading message history:', error); // <-- DEBUG Check for errors
       toast({ title: "Error", description: "Failed to load message history", variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -77,21 +78,20 @@ const History: React.FC = () => {
   };
 
   const confirmClearHistory = async () => {
-    console.log("[History confirmClearHistory] Attempting clear...");
+    console.log("[History confirmClearHistory] Attempting clear..."); // <-- DEBUG
     setShowClearConfirm(false);
     try {
-      await dbClearMessages();
-      console.log("[History confirmClearHistory] dbClearMessages() promise resolved.");
-      clearLiveMessagesState();
-      console.log("[History confirmClearHistory] clearLiveMessagesState() called.");
+      await clearMessages(); // Call the function from indexeddb lib
+      console.log("[History confirmClearHistory] clearMessages() promise resolved."); // <-- DEBUG
+      // Reset state AFTER successful clear
       setHistoricalMessages([]);
       setTotalHistoricalMessages(0);
       setTotalPages(1);
       setCurrentPage(1);
-      console.log("[History confirmClearHistory] State cleared.");
+      console.log("[History confirmClearHistory] State cleared."); // <-- DEBUG
       toast({ title: "Success", description: "Message history cleared successfully", variant: "success" });
     } catch (error) {
-      console.error('[History confirmClearHistory] Error clearing message history:', error);
+      console.error('[History confirmClearHistory] Error clearing message history:', error); // <-- DEBUG Check console for this
       toast({ title: "Error", description: "Failed to clear message history", variant: "destructive" });
     }
   };
@@ -99,12 +99,13 @@ const History: React.FC = () => {
   const handleApplyFilters = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentPage(1);
+    // useEffect dependency change will trigger loadHistoricalMessages
   };
 
   // --- Helper Functions ---
   const formatTimestamp = (timestamp: number): string => {
     if (!timestamp || typeof timestamp !== 'number' || timestamp <= 0) {
-        // console.warn(`[formatTimestamp] Invalid timestamp value: ${timestamp}`);
+        // console.warn(`[formatTimestamp] Invalid timestamp value: ${timestamp}`); // <-- DEBUG
         return 'Invalid Date';
     }
     try {
@@ -113,31 +114,21 @@ const History: React.FC = () => {
         hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false
       });
     } catch (e) {
-      console.error("[formatTimestamp] Error formatting timestamp:", timestamp, e);
+      console.error("[formatTimestamp] Error formatting timestamp:", timestamp, e); // <-- DEBUG
       return 'Invalid Date';
     }
   };
 
-  const isJsonString = (str: string): boolean => {
-    if (typeof str !== 'string' || !str.trim()) return false;
-    if (!((str.startsWith('{') && str.endsWith('}')) || (str.startsWith('[') && str.endsWith(']')))) {
-        return false;
-    }
-    try {
-      JSON.parse(str);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  };
+  const isJsonString = (str: string): boolean => { /* ... keep previous version ... */ };
 
   const renderPayload = (payload: string): React.ReactNode => {
     const trimmedPayload = typeof payload === 'string' ? payload.trim() : '';
-    // console.log(`[renderPayload] Input: "${payload}", Trimmed: "${trimmedPayload}"`);
+    // console.log(`[renderPayload] Input: "${payload}", Trimmed: "${trimmedPayload}"`); // <-- DEBUG
     if (trimmedPayload === '') {
       return <span className="text-gray-500 italic text-xs">[Empty]</span>;
     }
-    if (isJsonString(trimmedPayload)) {
+    // ... rest of renderPayload logic ...
+     if (isJsonString(trimmedPayload)) {
       try {
         const jsonObj = JSON.parse(trimmedPayload);
         const prettyJson = JSON.stringify(jsonObj, null, 2);
@@ -154,58 +145,16 @@ const History: React.FC = () => {
     return <div className="font-mono text-xs max-w-lg truncate" title={trimmedPayload}>{trimmedPayload}</div>;
   };
 
-  // UPDATED handleViewMessage with logging
-  const handleViewMessage = (message: MqttMessage) => {
-    console.log("[History handleViewMessage] Clicked. Message:", message); // <-- DEBUG
-
-    let formattedPayload = message.payload;
-    const payloadStr = typeof message.payload === 'string' ? message.payload : String(message.payload);
-
-    if (isJsonString(payloadStr)) {
-      try {
-        formattedPayload = JSON.stringify(JSON.parse(payloadStr), null, 2);
-      } catch (e) {
-        console.error("[History handleViewMessage] Error parsing supposedly valid JSON:", e);
-        formattedPayload = payloadStr;
-      }
-    } else {
-        formattedPayload = payloadStr;
-    }
-
-    console.log("[History handleViewMessage] Showing toast with Title:", message.topic, "Payload:", formattedPayload); // <-- DEBUG
-
-    try {
-        toast({
-          title: message.topic || "[No Topic]",
-          description: (
-            <div className="mt-2 bg-gray-900 p-2 rounded-md max-h-[400px] overflow-auto">
-              <pre className="text-xs font-mono whitespace-pre-wrap break-words">
-                {formattedPayload}
-              </pre>
-              <div className="text-xs mt-2 text-gray-400">
-                <div>Timestamp: {formatTimestamp(message.timestamp)}</div>
-                <div>QoS: {message.qos ?? 'N/A'}</div>
-                <div>Retain: {message.retain ? 'Yes' : 'No'}</div>
-              </div>
-            </div>
-          ),
-          variant: "info",
-          duration: 9000,
-        });
-        console.log("[History handleViewMessage] Toast should be visible."); // <-- DEBUG
-    } catch (toastError) {
-        console.error("[History handleViewMessage] Error calling toast function:", toastError); // <-- DEBUG
-    }
-  };
+  const handleViewMessage = (message: MqttMessage) => { /* ... keep previous version ... */ };
 
   // --- Combine Live and Historical Messages for Display ---
   const displayedMessages = useMemo(() => {
-    // console.log("[History useMemo] Recalculating displayedMessages...");
+    // console.log("[History useMemo] Recalculating displayedMessages..."); // <-- DEBUG
     const sortedLiveMessages = [...liveMessages].sort((a, b) => b.timestamp - a.timestamp);
     const liveMessageIds = new Set(sortedLiveMessages.map(msg => msg.id));
     const uniqueHistoricalMessages = historicalMessages.filter(msg => !liveMessageIds.has(msg.id));
     const combined = [...sortedLiveMessages, ...uniqueHistoricalMessages];
-    // console.log(`[History useMemo] Combined Count: ${combined.length}`);
+    // console.log(`[History useMemo] Combined Count: ${combined.length}`); // <-- DEBUG
     return combined;
   }, [liveMessages, historicalMessages]);
 
@@ -214,11 +163,13 @@ const History: React.FC = () => {
     <div className="bg-gray-800 rounded-lg shadow-xl p-4 sm:p-6 space-y-4 sm:space-y-6 h-full flex flex-col">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
-        <h2 className="font-heading text-2xl sm:text-3xl font-bold text-blue-400 whitespace-nowrap">
+        {/* ... Title and Export Button ... */}
+         <h2 className="font-heading text-2xl sm:text-3xl font-bold text-blue-400 whitespace-nowrap">
           Message History
         </h2>
         <div className="flex items-center space-x-2 sm:space-x-3 self-start sm:self-center">
           <MessageExportPanel />
+          {/* Clear History Button with Confirmation Dialog */}
           <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="icon" className="w-9 h-9 sm:w-10 sm:h-10" aria-label="Clear History">
@@ -234,6 +185,7 @@ const History: React.FC = () => {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setShowClearConfirm(false)}>Cancel</AlertDialogCancel>
+                {/* Ensure this calls the correct function */}
                 <AlertDialogAction onClick={confirmClearHistory} className="bg-red-600 hover:bg-red-700 focus:ring-red-600">
                   Clear History
                 </AlertDialogAction>
@@ -245,7 +197,8 @@ const History: React.FC = () => {
 
       {/* Filters */}
       <form onSubmit={handleApplyFilters} className="bg-gray-900/60 rounded-lg p-4 shrink-0">
-         <h3 className="font-medium text-lg text-gray-200 mb-3">Filter History</h3>
+        {/* ... Filter inputs and Apply button ... */}
+        <h3 className="font-medium text-lg text-gray-200 mb-3">Filter History</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <div><Label className="block text-gray-400 text-sm mb-1">Start Date/Time</Label><Input type="datetime-local" className="bg-gray-700/80 border-gray-600 focus:border-purple-500 w-full" value={startDateTime} onChange={(e) => setStartDateTime(e.target.value)} /></div>
           <div><Label className="block text-gray-400 text-sm mb-1">End Date/Time</Label><Input type="datetime-local" className="bg-gray-700/80 border-gray-600 focus:border-purple-500 w-full" value={endDateTime} onChange={(e) => setEndDateTime(e.target.value)} /></div>
@@ -269,9 +222,10 @@ const History: React.FC = () => {
           <tbody className="divide-y divide-gray-700">
             {displayedMessages.length > 0 ? (
               displayedMessages.map((message) => {
+                // --- DEBUG --- Log data for each row being rendered
+                // console.log(`  Rendering Row ID: ${message.id}, TS: ${message.timestamp}, Payload: "${message.payload}"`);
                 const timestampFormatted = formatTimestamp(message.timestamp);
                 const payloadRendered = renderPayload(message.payload);
-                // console.log(`  Rendering Row ID: ${message.id}, TS: ${message.timestamp}, Payload: "${message.payload}"`);
                 // console.log(`    Formatted TS: ${timestampFormatted}, Rendered Payload:`, payloadRendered);
 
                 return (
@@ -284,7 +238,6 @@ const History: React.FC = () => {
                     </td>
                     <td className="p-3">{payloadRendered}</td>
                     <td className="p-3 text-right whitespace-nowrap">
-                      {/* Ensure onClick calls the updated handleViewMessage */}
                       <Button variant="ghost" size="sm" className="text-blue-400 hover:text-blue-300 mr-2" onClick={() => handleViewMessage(message)}><i className="fas fa-eye"></i></Button>
                     </td>
                   </tr>
@@ -304,7 +257,8 @@ const History: React.FC = () => {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center text-sm pt-4 border-t border-gray-700/50 shrink-0">
-          <div>Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span> ({totalHistoricalMessages} historical messages found)</div>
+          {/* ... Pagination controls ... */}
+           <div>Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span> ({totalHistoricalMessages} historical messages found)</div>
           <div className="flex space-x-1">
             <Button variant="outline" size="sm" className="bg-gray-700 hover:bg-gray-600 text-white" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}><i className="fas fa-chevron-left"></i></Button>
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => { let pageNum; if (totalPages <= 5) { pageNum = i + 1; } else if (currentPage <= 3) { pageNum = i + 1; } else if (currentPage >= totalPages - 2) { pageNum = totalPages - 4 + i; } else { pageNum = currentPage - 2 + i; } return ( <Button key={pageNum} variant={pageNum === currentPage ? "default" : "outline"} size="sm" className={pageNum === currentPage ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-gray-700 hover:bg-gray-600 text-white"} onClick={() => setCurrentPage(pageNum)}>{pageNum}</Button> ); })}
